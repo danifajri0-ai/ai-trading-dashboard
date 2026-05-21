@@ -13,6 +13,10 @@ Streamlit dashboard untuk analisis market berbasis data publik. Dashboard ini me
 - Signal score berbasis trend, RSI, lokasi harga, volatilitas, dan risk-reward.
 - Risk plan dengan area entry, stop loss, take profit, dan rasio reward.
 - Overview modern dengan warna dinamis, panah tick naik/turun, dan status live/manual.
+- Data freshness indicator untuk membaca umur candle terakhir dan status data.
+- Best Setup Now card untuk merangkum entry zone, stop loss, take profit, confidence, dan invalidation note.
+- Market Radar untuk membandingkan semua pair pada timeframe aktif.
+- Decision Lab berisi backtest snapshot dan session signal history.
 - Panel detail untuk technical metrics, price action candle terakhir, market structure, ICT framework, risk, signal model, dan data integrity.
 - Modul terpisah untuk data market, indikator teknikal, sinyal, dan konteks market.
 
