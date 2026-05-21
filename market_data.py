@@ -1,10 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import time
 from typing import Iterable
+from urllib.parse import urlencode
+from urllib.request import urlopen
 
 import pandas as pd
-import yfinance as yf
 
 
 PAIRS: dict[str, str] = {
@@ -30,6 +33,28 @@ INTERVAL_PERIODS: dict[str, tuple[str, ...]] = {
 }
 
 REQUIRED_PRICE_COLUMNS: tuple[str, ...] = ("Open", "High", "Low", "Close")
+
+BINANCE_SYMBOLS: dict[str, str] = {
+    "BTC-USD": "BTCUSDT",
+    "ETH-USD": "ETHUSDT",
+}
+
+BINANCE_INTERVAL_MILLISECONDS: dict[str, int] = {
+    "5m": 300_000,
+    "15m": 900_000,
+    "30m": 1_800_000,
+    "1h": 3_600_000,
+    "1d": 86_400_000,
+}
+
+PERIOD_SECONDS: dict[str, int] = {
+    "1d": 86_400,
+    "5d": 432_000,
+    "1mo": 2_592_000,
+    "3mo": 7_776_000,
+    "6mo": 15_552_000,
+    "1y": 31_536_000,
+}
 
 
 @dataclass(frozen=True)
@@ -88,7 +113,19 @@ def normalize_market_data(raw_data: pd.DataFrame) -> pd.DataFrame:
 
 
 def fetch_market_data(symbol: str, period: str, interval: str) -> pd.DataFrame:
+    if symbol in BINANCE_SYMBOLS:
+        try:
+            data = fetch_binance_klines(BINANCE_SYMBOLS[symbol], period, interval)
+            if not data.empty:
+                return data
+        except Exception:
+            # Binance may be blocked in some networks/regions. Yahoo remains the
+            # cloud-safe fallback for the public demo.
+            pass
+
     try:
+        import yfinance as yf
+
         raw_data = yf.download(
             symbol,
             period=period,
@@ -105,6 +142,75 @@ def fetch_market_data(symbol: str, period: str, interval: str) -> pd.DataFrame:
         raise MarketDataError("Data kosong. Coba pair, periode, atau timeframe lain.")
 
     return data
+
+
+def data_source_label(symbol: str) -> str:
+    if symbol in BINANCE_SYMBOLS:
+        return "Binance Public Klines / Yahoo Fallback"
+    return "Yahoo Finance Snapshot"
+
+
+def fetch_binance_klines(symbol: str, period: str, interval: str) -> pd.DataFrame:
+    seconds = PERIOD_SECONDS.get(period, PERIOD_SECONDS["1mo"])
+    start_time = int((time.time() - seconds) * 1000)
+    end_time = int(time.time() * 1000)
+    interval_ms = BINANCE_INTERVAL_MILLISECONDS.get(interval, 3_600_000)
+    rows: list[list[object]] = []
+    cursor = start_time
+    max_pages = 12
+
+    for _ in range(max_pages):
+        params = {
+            "symbol": symbol,
+            "interval": interval,
+            "startTime": cursor,
+            "endTime": end_time,
+            "limit": 1000,
+        }
+        url = f"https://api.binance.com/api/v3/klines?{urlencode(params)}"
+        with urlopen(url, timeout=10) as response:
+            page_rows = json.loads(response.read().decode("utf-8"))
+
+        if not page_rows:
+            break
+
+        rows.extend(page_rows)
+        last_open_time = int(page_rows[-1][0])
+        next_cursor = last_open_time + interval_ms
+        if next_cursor <= cursor or next_cursor >= end_time or len(page_rows) < 1000:
+            break
+        cursor = next_cursor
+
+    if not rows:
+        return pd.DataFrame()
+
+    data = pd.DataFrame(
+        rows,
+        columns=[
+            "OpenTime",
+            "Open",
+            "High",
+            "Low",
+            "Close",
+            "Volume",
+            "CloseTime",
+            "QuoteAssetVolume",
+            "TradeCount",
+            "TakerBuyBaseVolume",
+            "TakerBuyQuoteVolume",
+            "Ignore",
+        ],
+    )
+    data = data.rename(columns={"OpenTime": "Timestamp"})
+    data["Timestamp"] = pd.to_datetime(data["Timestamp"], unit="ms", utc=True)
+
+    for column in ("Open", "High", "Low", "Close", "Volume"):
+        data[column] = pd.to_numeric(data[column], errors="coerce")
+
+    data = data[["Timestamp", "Open", "High", "Low", "Close", "Volume"]]
+    data = data.dropna(subset=list(REQUIRED_PRICE_COLUMNS))
+    data = data.drop_duplicates(subset=["Timestamp"], keep="last")
+    return data.sort_values("Timestamp").reset_index(drop=True)
 
 
 def validate_request(request: MarketRequest) -> None:

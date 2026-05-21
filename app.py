@@ -24,6 +24,7 @@ from market_data import (
     MarketDataError,
     MarketRequest,
     compatible_periods,
+    data_source_label,
     fetch_market_data,
     get_symbol,
     validate_request,
@@ -52,9 +53,9 @@ st.set_page_config(
 @dataclass(frozen=True)
 class RuntimeSettings:
     live_mode: bool
+    refresh_mode: str
     refresh_seconds: int
-    chart_mode: str
-    chart_behavior: str
+    data_source: str
 
 
 @dataclass(frozen=True)
@@ -92,24 +93,27 @@ def main() -> None:
 
     refresh_bucket = int(time.time() // runtime.refresh_seconds) if runtime.live_mode else 0
 
-    with st.spinner(f"Mengambil data {request.label} dari Yahoo Finance..."):
-        try:
-            raw_data = load_market_data(
-                request.symbol,
-                request.period,
-                request.interval,
-                refresh_bucket,
-            )
-        except MarketDataError as exc:
-            st.error(str(exc))
-            st.stop()
+    try:
+        raw_data = load_market_data(
+            request.symbol,
+            request.period,
+            request.interval,
+            refresh_bucket,
+        )
+    except MarketDataError as exc:
+        st.error(str(exc))
+        st.stop()
 
-    data = add_indicators(raw_data, indicator_settings)
-    levels = calculate_levels(data, indicator_settings)
-    trend = analyze_trend(levels)
-    risk_plan = calculate_risk_plan(levels, trend, indicator_settings)
-    signal = build_signal_summary(levels, trend, risk_plan)
-    movement = calculate_price_movement(data)
+    try:
+        data = add_indicators(raw_data, indicator_settings)
+        levels = calculate_levels(data, indicator_settings)
+        trend = analyze_trend(levels)
+        risk_plan = calculate_risk_plan(levels, trend, indicator_settings)
+        signal = build_signal_summary(levels, trend, risk_plan)
+        movement = calculate_price_movement(data)
+    except Exception as exc:
+        st.error(f"Data berhasil dimuat, tetapi analisis belum bisa dihitung: {exc}")
+        st.stop()
 
     render_section("Header", render_header, request, levels, trend, signal, runtime, len(data), movement)
     render_section("Overview", render_status_bar, request, levels, trend, signal, indicator_settings, movement)
@@ -119,6 +123,7 @@ def main() -> None:
     render_section("Detailed Trading Information", render_detail_panels, data, levels, trend, risk_plan, signal, indicator_settings, movement)
     render_section("Market Context", render_context, request)
     render_disclaimer()
+    render_footer()
 
 
 def render_section(section_name: str, renderer, *args) -> None:
@@ -130,55 +135,85 @@ def render_section(section_name: str, renderer, *args) -> None:
 
 def render_sidebar() -> tuple[MarketRequest, IndicatorSettings, RuntimeSettings]:
     with st.sidebar:
-        st.header("Market Setup")
+        st.markdown(
+            """
+            <div class="sidebar-panel">
+                <span>Market Setup</span>
+                <p>Pilih market, timeframe, dan rentang data yang ingin dipantau.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
-        selected_pair = st.selectbox("Pilih Pair", list(PAIRS.keys()))
+        selected_pair = st.selectbox("Market", list(PAIRS.keys()))
         interval = st.selectbox("Timeframe", list(INTERVALS), index=3)
 
         allowed_periods = compatible_periods(interval)
         default_period = "1mo" if "1mo" in allowed_periods else allowed_periods[-1]
         period = st.selectbox(
-            "Periode",
+            "Data Range",
             list(allowed_periods),
             index=list(allowed_periods).index(default_period),
         )
 
-        st.divider()
-        st.header("Live Update")
-        live_mode = st.toggle("Auto-refresh sinyal", value=True)
-        refresh_seconds = st.selectbox("Refresh Interval", [10, 15, 30, 60, 120, 300], index=2)
-        chart_mode = st.radio(
-            "Chart Engine",
-            ["Stable Realtime", "TradingView Style", "Plotly Fallback"],
-            horizontal=False,
+        st.markdown(
+            """
+            <div class="sidebar-panel compact">
+                <span>Data Setup</span>
+                <p>Atur ritme pembaruan data sesuai gaya monitoring Anda.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
-        chart_behavior = st.radio(
-            "Chart Refresh Behavior",
-            ["Follow latest candle", "Preserve manual zoom"],
+        refresh_mode = st.radio(
+            "Update Mode",
+            ["Smooth Refresh", "Live Monitor", "Manual Review"],
             horizontal=False,
+            help="Smooth Refresh menjaga tampilan chart lebih tenang untuk pemantauan rutin. Live Monitor memperbarui lebih cepat.",
         )
 
-        st.caption(
-            "Mode ini near realtime. Yahoo Finance bukan feed broker tick-by-tick, "
-            "jadi data bisa delay atau tidak berubah setiap refresh."
+        if refresh_mode == "Live Monitor":
+            refresh_seconds = st.selectbox("Refresh Interval", [10, 15, 30], index=1)
+            live_mode = True
+        elif refresh_mode == "Smooth Refresh":
+            refresh_seconds = st.selectbox("Refresh Interval", [30, 60, 120, 300], index=1)
+            live_mode = True
+        else:
+            refresh_seconds = 300
+            live_mode = False
+
+        st.markdown(
+            """
+            <div class="sidebar-note">
+                Zoom dan posisi chart dipertahankan saat data diperbarui. Data publik dapat memiliki jeda dan perlu divalidasi dengan broker.
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
 
-        st.divider()
-        st.header("Indicator Setup")
-        ema_fast = st.number_input("EMA Cepat", min_value=2, max_value=100, value=20, step=1)
+        st.markdown(
+            """
+            <div class="sidebar-panel compact">
+                <span>Indicator Setup</span>
+                <p>Sesuaikan sensitivitas sinyal, area harga, dan rencana risiko.</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        ema_fast = st.number_input("Fast EMA", min_value=2, max_value=100, value=20, step=1)
         ema_slow = st.number_input(
-            "EMA Lambat",
+            "Slow EMA",
             min_value=int(ema_fast) + 1,
             max_value=300,
             value=max(50, int(ema_fast) + 1),
             step=1,
         )
-        rsi_window = st.number_input("RSI Window", min_value=5, max_value=50, value=14, step=1)
-        atr_window = st.number_input("ATR Window", min_value=5, max_value=50, value=14, step=1)
-        level_window = st.number_input("Support/Resistance Candle", min_value=10, max_value=200, value=30, step=5)
-        risk_reward = st.number_input("Risk Reward Target", min_value=1.0, max_value=5.0, value=2.0, step=0.25)
+        rsi_window = st.number_input("RSI Period", min_value=5, max_value=50, value=14, step=1)
+        atr_window = st.number_input("ATR Period", min_value=5, max_value=50, value=14, step=1)
+        level_window = st.number_input("S/R Lookback Candles", min_value=10, max_value=200, value=30, step=5)
+        risk_reward = st.number_input("Risk:Reward Target", min_value=1.0, max_value=5.0, value=2.0, step=0.25)
 
-        if st.button("Refresh Data Sekarang", use_container_width=True):
+        if st.button("Update Market Data", use_container_width=True):
             load_market_data.clear()
             st.rerun()
 
@@ -198,9 +233,9 @@ def render_sidebar() -> tuple[MarketRequest, IndicatorSettings, RuntimeSettings]
     )
     runtime = RuntimeSettings(
         live_mode=bool(live_mode),
+        refresh_mode=refresh_mode,
         refresh_seconds=int(refresh_seconds),
-        chart_mode=chart_mode,
-        chart_behavior=chart_behavior,
+        data_source=data_source_label(get_symbol(selected_pair)),
     )
     return request, indicator_settings, runtime
 
@@ -216,15 +251,9 @@ def arm_auto_refresh(runtime: RuntimeSettings) -> None:
         )
         return
 
-    components.html(
-        f"""
-        <script>
-          setTimeout(function() {{
-            window.parent.location.reload();
-          }}, {runtime.refresh_seconds * 1000});
-        </script>
-        """,
-        height=0,
+    st.sidebar.warning(
+        "Auto-refresh belum aktif karena paket streamlit-autorefresh tidak tersedia. "
+        "Gunakan tombol Update Market Data atau install dependency dari requirements.txt."
     )
 
 
@@ -237,7 +266,12 @@ def render_header(
     candle_count: int,
     movement: PriceMovement,
 ) -> None:
-    live_status = "LIVE AUTO" if runtime.live_mode else "MANUAL"
+    live_status = {
+        "Smooth Refresh": "Smooth",
+        "Live Monitor": "Live",
+        "Manual Review": "Manual",
+    }.get(runtime.refresh_mode, runtime.refresh_mode)
+    source_label = "Binance / Yahoo" if "Binance" in runtime.data_source else "Yahoo Public"
     refreshed_at = datetime.now().strftime("%H:%M:%S")
     action_class = "buy" if signal.action == "BUY" else "sell" if signal.action == "SELL" else "wait"
     trend_class = "buy" if trend.direction == "BUY" else "sell" if trend.direction == "SELL" else "wait"
@@ -248,12 +282,16 @@ def render_header(
             <div>
                 <div class="eyebrow">AI Trading Dashboard</div>
                 <h1>{request.label} Trading Desk</h1>
-                <p>Near realtime technical desk with preserved chart view, signal scoring, market structure, and structured risk plan.</p>
+                <p>Pantau arah market, momentum, area harga penting, dan rencana risiko dalam satu tampilan profesional.</p>
             </div>
             <div class="terminal-grid">
                 <div class="terminal-cell">
                     <span>Mode</span>
                     <strong>{live_status}</strong>
+                </div>
+                <div class="terminal-cell">
+                    <span>Source</span>
+                    <strong>{source_label}</strong>
                 </div>
                 <div class="terminal-cell">
                     <span>Signal</span>
@@ -280,6 +318,10 @@ def render_header(
                     <strong>{refreshed_at}</strong>
                 </div>
                 <div class="terminal-cell">
+                    <span>Update Pace</span>
+                    <strong>{runtime.refresh_seconds}s</strong>
+                </div>
+                <div class="terminal-cell">
                     <span>Candles</span>
                     <strong>{candle_count}</strong>
                 </div>
@@ -302,21 +344,26 @@ def render_status_bar(
 
     render_signal_strip(levels, trend, signal, movement)
 
-    col_a, col_b, col_c, col_d, col_e, col_f = st.columns(6)
-    col_a.metric("Harga Terakhir", format_price(levels.latest_close))
-    col_b.metric("Perubahan", f"{movement.arrow} {format_signed(movement.change)}", f"{movement.change_percent:+.2f}%")
-    col_c.metric("Bias", trend.bias)
-    col_d.metric(f"RSI {settings.rsi_window}", format_price(levels.rsi))
-    col_e.metric(f"ATR {settings.atr_window}", format_price(levels.atr))
-    col_f.metric("AI Score", f"{signal.confidence}%")
+    trend_style = "buy" if trend.direction == "BUY" else "sell" if trend.direction == "SELL" else "wait"
+    signal_style = "buy" if signal.action == "BUY" else "sell" if signal.action == "SELL" else "wait"
+    rsi_style = "sell" if levels.rsi >= 70 else "buy" if levels.rsi <= 30 else "neutral"
+    volatility_style = "sell" if levels.atr_percent > 5 else "wait" if levels.atr_percent > 3 else "neutral"
 
-    detail_a, detail_b, detail_c, detail_d, detail_e, detail_f = st.columns(6)
-    detail_a.metric("Support", format_price(levels.support))
-    detail_b.metric("Resistance", format_price(levels.resistance))
-    detail_c.metric("Distance to Support", format_price(levels.distance_to_support))
-    detail_d.metric("Distance to Resistance", format_price(levels.distance_to_resistance))
-    detail_e.metric("Range Periode", format_price(levels.highest_price - levels.lowest_price))
-    detail_f.metric("ATR %", f"{levels.atr_percent:.2f}%")
+    overview_cards = [
+        ("Harga Terakhir", format_price(levels.latest_close), "Harga market terkini", "neutral"),
+        ("Perubahan", f"{movement.arrow} {format_signed(movement.change)}", f"{movement.change_percent:+.2f}% dari candle sebelumnya", movement.css_class),
+        ("Bias", trend.bias, trend.strength, trend_style),
+        (f"RSI {settings.rsi_window}", format_price(levels.rsi), interpret_rsi(levels.rsi), rsi_style),
+        (f"ATR {settings.atr_window}", format_price(levels.atr), f"{levels.atr_percent:.2f}% volatilitas", volatility_style),
+        ("AI Score", f"{signal.confidence}%", signal.action, signal_style),
+        ("Support", format_price(levels.support), f"Area low dari {settings.level_window} candle", "buy"),
+        ("Resistance", format_price(levels.resistance), f"Area high dari {settings.level_window} candle", "sell"),
+        ("Distance to Support", format_price(levels.distance_to_support), "Jarak ke area demand", "neutral"),
+        ("Distance to Resistance", format_price(levels.distance_to_resistance), "Jarak ke area supply", "neutral"),
+        ("Range Periode", format_price(levels.highest_price - levels.lowest_price), "High-low aktif", "neutral"),
+        ("ATR %", f"{levels.atr_percent:.2f}%", "Volatilitas relatif", volatility_style),
+    ]
+    render_overview_cards(overview_cards)
 
 
 def render_signal_strip(
@@ -359,6 +406,25 @@ def render_signal_strip(
     )
 
 
+def render_overview_cards(cards: list[tuple[str, str, str, str]]) -> None:
+    html_cards = []
+    for title, value, detail, style in cards:
+        html_cards.append(
+            (
+                f'<div class="overview-card {style}">'
+                f'<span>{escape_html(title)}</span>'
+                f'<strong>{escape_html(value)}</strong>'
+                f'<em>{escape_html(detail)}</em>'
+                f'</div>'
+            )
+        )
+
+    st.markdown(
+        f'<div class="overview-card-grid">{"".join(html_cards)}</div>',
+        unsafe_allow_html=True,
+    )
+
+
 def render_chart(
     data: pd.DataFrame,
     request: MarketRequest,
@@ -366,25 +432,17 @@ def render_chart(
     settings: IndicatorSettings,
     runtime: RuntimeSettings,
 ) -> None:
-    st.subheader(f"Chart: {request.label}")
+    st.subheader(f"Pro Chart: {request.label}")
 
-    if runtime.chart_mode == "TradingView Style" and not data.empty:
-        try:
-            render_lightweight_chart(data, request, levels, settings, runtime)
-            st.caption("Chart menyimpan view setelah Anda zoom/pan. Gunakan Follow Latest untuk mengikuti candle terbaru.")
-            return
-        except Exception as exc:
-            st.warning(f"TradingView-style chart gagal dimuat, memakai fallback Plotly. Detail: {exc}")
-
-    if runtime.chart_mode == "Stable Realtime" and not data.empty:
-        render_plotly_chart(data, request.label, levels, settings, stable_view=True)
-        st.caption("Stable Realtime memakai Plotly dengan uirevision agar zoom/pan lebih tahan saat Streamlit refresh.")
+    if data.empty:
+        st.warning("Chart belum bisa ditampilkan karena data kosong.")
         return
 
-    if not data.empty:
-        render_plotly_chart(data, request.label, levels, settings, stable_view=False)
-    else:
-        st.warning("Chart belum bisa ditampilkan karena data kosong.")
+    render_plotly_chart(data, request, levels, settings, stable_view=True)
+    st.caption(
+        f"Zoom dan posisi chart tetap dipertahankan saat refresh {runtime.refresh_seconds} detik. "
+        f"Mode aktif: {runtime.refresh_mode}."
+    )
 
 
 def render_lightweight_chart(
@@ -397,7 +455,7 @@ def render_lightweight_chart(
     payload = build_lightweight_payload(data, settings)
     chart_id = f"tv_chart_{request.label.replace('/', '_').replace('=', '_')}_{request.interval}_{request.period}"
     storage_key = f"aiTradingDashboard.range.{request.label}.{request.period}.{request.interval}"
-    follow_latest_default = runtime.chart_behavior == "Follow latest candle"
+    follow_latest_default = True
     support = _json_number(levels.support)
     resistance = _json_number(levels.resistance)
 
@@ -431,7 +489,7 @@ def render_lightweight_chart(
       const followButton = document.getElementById("{chart_id}_follow");
       const followKey = storageKey + ".follow";
       if (!window.LightweightCharts) {{
-        priceEl.innerHTML = '<div class="tv-error">Chart library tidak berhasil dimuat. Pilih Plotly Fallback di sidebar jika koneksi/CDN sedang diblokir.</div>';
+        priceEl.innerHTML = '<div class="tv-error">Chart alternatif tidak berhasil dimuat. Gunakan Pro Chart utama untuk tampilan yang lebih stabil.</div>';
         rsiEl.style.display = "none";
       }} else {{
       const common = {{
@@ -721,7 +779,7 @@ def render_lightweight_chart(
 
 def render_plotly_chart(
     data: pd.DataFrame,
-    pair_label: str,
+    request: MarketRequest,
     levels: MarketLevels,
     settings: IndicatorSettings,
     stable_view: bool,
@@ -807,13 +865,28 @@ def render_plotly_chart(
         margin=dict(l=10, r=10, t=30, b=10),
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
         hovermode="x unified",
-        title=f"{pair_label} Technical Chart",
-        uirevision=f"{pair_label}-{settings.ema_fast}-{settings.ema_slow}" if stable_view else None,
+        title=f"{request.label} Technical Chart",
+        dragmode="pan",
+        transition=dict(duration=220, easing="cubic-in-out"),
+        uirevision=(
+            f"{request.label}-{request.period}-{request.interval}-{settings.ema_fast}-{settings.ema_slow}"
+            if stable_view
+            else None
+        ),
     )
     fig.update_yaxes(title_text="Price", row=1, col=1)
     fig.update_yaxes(title_text="RSI", range=[0, 100], row=2, col=1)
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(
+        fig,
+        use_container_width=True,
+        key=f"pro_chart_{request.label}_{request.period}_{request.interval}_{settings.ema_fast}_{settings.ema_slow}",
+        config={
+            "displayModeBar": False,
+            "scrollZoom": True,
+            "responsive": True,
+        },
+    )
 
 
 def render_analysis(
@@ -824,20 +897,14 @@ def render_analysis(
 ) -> None:
     st.subheader("Market Analysis")
 
-    bias_col, score_col = st.columns([1.15, 1])
+    bias_col, score_col = st.columns(2, gap="medium")
     with bias_col:
+        st.markdown('<div class="panel-title">Market Reading</div>', unsafe_allow_html=True)
         analysis_points = build_market_analysis_points(levels, trend, signal, movement)
         render_info_cards(analysis_points)
 
-        if signal.action == "BUY":
-            st.success(signal.summary)
-        elif signal.action == "SELL":
-            st.error(signal.summary)
-        else:
-            st.warning(signal.summary)
-
     with score_col:
-        st.write("**Signal Factors**")
+        st.markdown('<div class="panel-title">Signal Factors</div>', unsafe_allow_html=True)
         render_signal_factor_cards(signal)
 
 
@@ -863,8 +930,8 @@ def render_detail_panels(
 ) -> None:
     st.subheader("Detailed Trading Information")
 
-    technical_tab, candle_tab, structure_tab, risk_tab, signal_tab, integrity_tab = st.tabs(
-        ["Technical", "Price Action", "Market Structure", "Risk", "Signal Model", "Data Integrity"]
+    technical_tab, candle_tab, structure_tab, ict_tab, risk_tab, signal_tab, integrity_tab = st.tabs(
+        ["Technical", "Price Action", "Market Structure", "ICT Framework", "Risk", "Signal Model", "Data Integrity"]
     )
 
     with technical_tab:
@@ -898,6 +965,14 @@ def render_detail_panels(
         rows = build_market_structure_rows(levels, trend, movement)
         st.dataframe(
             pd.DataFrame(rows, columns=["Structure", "Value", "Reading"]),
+            hide_index=True,
+            use_container_width=True,
+        )
+
+    with ict_tab:
+        ict_rows = build_ict_framework_rows(data, levels, trend)
+        st.dataframe(
+            pd.DataFrame(ict_rows, columns=["ICT Concept", "Reading", "How To Use"]),
             hide_index=True,
             use_container_width=True,
         )
@@ -947,15 +1022,47 @@ def render_context(request: MarketRequest) -> None:
     st.subheader("Market Context")
     context_items = build_market_context(request.label, request.period, request.interval)
     cards = [(item.title, item.detail, "neutral") for item in context_items]
+    cards.extend(
+        [
+            (
+                "Data Policy",
+                "BTC/ETH memakai data publik Binance sebagai prioritas; market lain memakai data publik Yahoo. Feed broker bisa ditambahkan untuk versi produksi.",
+                "wait",
+            ),
+            (
+                "Client Readiness",
+                "Sinyal dirangkum dari trend, momentum, area harga, volatilitas, dan risk plan sehingga mudah diaudit sebelum dipakai klien.",
+                "buy",
+            ),
+        ]
+    )
     render_info_cards(cards)
 
 
 def render_disclaimer() -> None:
     st.info(
-        "Dashboard ini memakai data Yahoo Finance, bukan feed broker langsung. "
-        "Auto-refresh memperbarui analisis dan sinyal secara berkala, tetapi bukan eksekusi trading "
-        "dan bukan jaminan data tick-by-tick. Selalu validasi dengan broker, price action, news, "
-        "money management, dan rencana trading pribadi."
+        "Dashboard ini memakai data publik dan berfungsi sebagai decision-support, bukan sinyal eksekusi otomatis. "
+        "Selalu validasi harga, spread, berita besar, dan manajemen risiko melalui broker sebelum mengambil posisi."
+    )
+
+
+def render_footer() -> None:
+    current_year = 2026
+    st.markdown(
+        f"""
+        <footer class="app-footer">
+            <div>
+                <strong>AI Trading Dashboard™</strong>
+                <span>© {current_year} Muhammad Alfazry Ramadhani. All rights reserved.</span>
+            </div>
+            <p>
+                Trademark notice: AI Trading Dashboard™ merupakan identitas produk dan karya digital
+                Muhammad Alfazry Ramadhani. Penggunaan ulang, distribusi, atau komersialisasi tanpa izin
+                tertulis tidak diperbolehkan.
+            </p>
+        </footer>
+        """,
+        unsafe_allow_html=True,
     )
 
 
@@ -1095,12 +1202,15 @@ def build_market_analysis_points(
     if signal.action == "BUY":
         action_style = "buy"
         action_note = "Prioritas buy hanya jika harga memberi pullback/rejection yang jelas."
+        summary_style = "buy"
     elif signal.action == "SELL":
         action_style = "sell"
         action_note = "Prioritas sell hanya jika harga memberi pullback/rejection yang jelas."
+        summary_style = "sell"
     else:
         action_style = "wait"
         action_note = "Tidak ada keunggulan kuat; tunggu breakout, retest, atau candle konfirmasi."
+        summary_style = "wait"
 
     location_note = "Harga berada di tengah range."
     location_style = "neutral"
@@ -1113,12 +1223,13 @@ def build_market_analysis_points(
 
     return [
         ("Action Bias", f"{signal.action} - {signal.confidence}%", action_style),
-        ("Execution Note", action_note, action_style),
+        ("Signal Summary", signal.summary, summary_style),
         ("Trend Reading", f"{trend.trend} - {trend.strength}", action_style if trend.direction == signal.action else "neutral"),
         ("Tick Direction", f"{movement.arrow} {movement.label} ({movement.change_percent:+.2f}%)", movement.css_class),
         ("Price Location", location_note, location_style),
         ("RSI Context", interpret_rsi(levels.rsi), "sell" if levels.rsi >= 70 else "buy" if levels.rsi <= 30 else "neutral"),
         ("Volatility", interpret_volatility(levels.atr_percent), "sell" if levels.atr_percent > 5 else "wait" if levels.atr_percent > 3 else "buy"),
+        ("Execution Note", action_note, action_style),
     ]
 
 
@@ -1142,6 +1253,73 @@ def build_market_structure_rows(
     ]
 
 
+def build_ict_framework_rows(
+    data: pd.DataFrame,
+    levels: MarketLevels,
+    trend: TrendAnalysis,
+) -> list[tuple[str, str, str]]:
+    range_size = max(levels.resistance - levels.support, 0.0)
+    equilibrium = levels.support + (range_size * 0.5) if range_size else levels.latest_close
+    range_position = ((levels.latest_close - levels.support) / range_size * 100) if range_size else 50.0
+
+    if levels.latest_close > equilibrium:
+        premium_discount = f"Premium zone ({range_position:.1f}%)"
+        pd_note = "Lebih selektif untuk buy; pantau sell-side rejection atau FVG retest."
+    else:
+        premium_discount = f"Discount zone ({range_position:.1f}%)"
+        pd_note = "Lebih selektif untuk sell; pantau buy-side rejection atau FVG retest."
+
+    sweep_reading = detect_liquidity_sweep(data)
+    fvg_reading = detect_simple_fvg(data)
+    bias_note = "Bullish delivery model" if trend.direction == "BUY" else "Bearish delivery model" if trend.direction == "SELL" else "No clear delivery model"
+
+    return [
+        ("Premium / Discount", premium_discount, pd_note),
+        ("Liquidity Sweep", sweep_reading, "Cari konfirmasi displacement setelah sweep, bukan entry buta."),
+        ("Fair Value Gap", fvg_reading, "Gunakan sebagai area retest jika searah dengan bias dan struktur."),
+        ("Delivery Bias", bias_note, "Gabungkan dengan BOS/CHoCH sebelum membuat keputusan entry."),
+        ("Model Status", "Foundation mode", "Framework ICT ini masih advisory; perlu backtest sebelum dipakai sebagai sinyal utama."),
+    ]
+
+
+def detect_liquidity_sweep(data: pd.DataFrame) -> str:
+    if len(data) < 12:
+        return "Insufficient candles"
+
+    recent = data.tail(12)
+    last = recent.iloc[-1]
+    previous = recent.iloc[:-1]
+    previous_high = float(previous["High"].max())
+    previous_low = float(previous["Low"].min())
+    last_high = float(last["High"])
+    last_low = float(last["Low"])
+    last_close = float(last["Close"])
+
+    if last_high > previous_high and last_close < previous_high:
+        return "Buy-side liquidity sweep candidate"
+    if last_low < previous_low and last_close > previous_low:
+        return "Sell-side liquidity sweep candidate"
+    return "No fresh sweep detected"
+
+
+def detect_simple_fvg(data: pd.DataFrame) -> str:
+    if len(data) < 3:
+        return "Insufficient candles"
+
+    c1 = data.iloc[-3]
+    c3 = data.iloc[-1]
+    c1_high = float(c1["High"])
+    c1_low = float(c1["Low"])
+    c3_high = float(c3["High"])
+    c3_low = float(c3["Low"])
+
+    if c3_low > c1_high:
+        return f"Bullish FVG candidate: {format_price(c1_high)} - {format_price(c3_low)}"
+    if c3_high < c1_low:
+        return f"Bearish FVG candidate: {format_price(c3_high)} - {format_price(c1_low)}"
+    return "No active 3-candle FVG"
+
+
 def build_data_integrity_rows(data: pd.DataFrame) -> list[tuple[str, str, str]]:
     required_columns = ["Timestamp", "Open", "High", "Low", "Close"]
     missing_columns = [column for column in required_columns if column not in data.columns]
@@ -1150,15 +1328,26 @@ def build_data_integrity_rows(data: pd.DataFrame) -> list[tuple[str, str, str]]:
     candle_count = len(data)
     latest_time = format_timestamp(data["Timestamp"].iloc[-1]) if "Timestamp" in data.columns and not data.empty else "-"
     has_volume = "Volume" in data.columns and data["Volume"].notna().any()
+    monotonic_time = bool(data["Timestamp"].is_monotonic_increasing) if "Timestamp" in data.columns and not data.empty else False
+    invalid_ohlc = 0
+    if not missing_columns and not data.empty:
+        invalid_ohlc = int(
+            (
+                (data["High"] < data[["Open", "Close", "Low"]].max(axis=1))
+                | (data["Low"] > data[["Open", "Close", "High"]].min(axis=1))
+            ).sum()
+        )
 
     rows = [
         ("Required Columns", "OK" if not missing_columns else "Warning", "Lengkap" if not missing_columns else ", ".join(missing_columns)),
         ("Candle Count", "OK" if candle_count >= 30 else "Warning", f"{candle_count} candles loaded"),
         ("Latest Timestamp", "OK" if latest_time != "-" else "Warning", latest_time),
+        ("Time Order", "OK" if monotonic_time else "Warning", "Timestamp berurutan" if monotonic_time else "Timestamp perlu dicek"),
         ("Duplicate Timestamp", "OK" if duplicate_timestamps == 0 else "Warning", f"{duplicate_timestamps} duplicate rows"),
         ("Missing OHLC Values", "OK" if missing_price_values == 0 else "Warning", f"{missing_price_values} missing values"),
+        ("OHLC Consistency", "OK" if invalid_ohlc == 0 else "Warning", f"{invalid_ohlc} candle tidak konsisten"),
         ("Volume Data", "OK" if has_volume else "Info", "Available" if has_volume else "Tidak tersedia dari source untuk kombinasi ini"),
-        ("Realtime Integrity", "Info", "Yahoo Finance bersifat near realtime/delayed, bukan broker tick feed."),
+        ("Update Integrity", "Info", "Data diperbarui berkala dari source publik; gunakan harga broker untuk keputusan eksekusi."),
     ]
     return rows
 
@@ -1341,10 +1530,53 @@ def render_global_styles() -> None:
             background: #08111f;
             border-right: 1px solid rgba(148, 163, 184, 0.16);
           }
+          [data-testid="stSidebar"] .block-container,
+          [data-testid="stSidebar"] > div:first-child {
+            padding-top: 1.2rem;
+          }
           [data-testid="stSidebar"] label,
           [data-testid="stSidebar"] p,
           [data-testid="stSidebar"] span {
             color: #cbd5e1;
+          }
+          .sidebar-panel {
+            padding: 14px 14px 13px;
+            margin: 0 0 14px 0;
+            border-radius: 12px;
+            border: 1px solid rgba(56, 189, 248, 0.18);
+            background: linear-gradient(135deg, rgba(56, 189, 248, 0.10), rgba(15, 23, 42, 0.80));
+          }
+          .sidebar-panel.compact {
+            margin-top: 18px;
+          }
+          .sidebar-panel span {
+            display: block;
+            color: #f8fafc !important;
+            font-size: 13px;
+            font-weight: 820;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+          }
+          .sidebar-panel p {
+            margin: 0;
+            color: #94a3b8 !important;
+            font-size: 12px;
+            line-height: 1.45;
+          }
+          .sidebar-note {
+            margin: 10px 0 4px;
+            padding: 11px 12px;
+            border-radius: 10px;
+            border: 1px solid rgba(34, 197, 94, 0.20);
+            background: rgba(34, 197, 94, 0.08);
+            color: #b7c6d9;
+            font-size: 12px;
+            line-height: 1.45;
+          }
+          [data-testid="stSidebar"] div[data-baseweb="select"] > div,
+          [data-testid="stSidebar"] div[data-baseweb="input"] > div,
+          [data-testid="stSidebar"] [role="radiogroup"] {
+            border-radius: 10px;
           }
           [data-testid="stMetric"] {
             background: rgba(15, 23, 42, 0.72);
@@ -1372,10 +1604,7 @@ def render_global_styles() -> None:
             font-variant-numeric: tabular-nums;
           }
           .terminal-header {
-            display: flex;
-            justify-content: space-between;
-            gap: 24px;
-            align-items: stretch;
+            display: block;
             padding: 22px;
             margin-bottom: 18px;
             border: 1px solid rgba(148, 163, 184, 0.18);
@@ -1403,16 +1632,20 @@ def render_global_styles() -> None:
           }
           .terminal-grid {
             display: grid;
-            grid-template-columns: repeat(4, minmax(128px, 1fr));
+            grid-template-columns: repeat(5, minmax(0, 1fr));
             gap: 12px;
-            min-width: 560px;
+            width: 100%;
+            margin-top: 18px;
           }
           .terminal-cell {
             border: 1px solid rgba(148, 163, 184, 0.14);
             border-radius: 10px;
             padding: 13px 14px;
             background: rgba(2, 6, 23, 0.42);
-            min-height: 82px;
+            min-height: 88px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
             transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
           }
           .terminal-cell:hover {
@@ -1430,9 +1663,10 @@ def render_global_styles() -> None:
           }
           .terminal-cell strong {
             color: #f8fafc;
-            font-size: 18px;
+            font-size: clamp(15px, 1.05vw, 18px);
             font-weight: 820;
             font-variant-numeric: tabular-nums;
+            overflow-wrap: anywhere;
           }
           .terminal-cell strong.buy { color: #22c55e; }
           .terminal-cell strong.sell { color: #ef4444; }
@@ -1489,14 +1723,92 @@ def render_global_styles() -> None:
           .signal-pill.sell strong { color: #ef4444; }
           .signal-pill.wait strong { color: #f59e0b; }
           .signal-pill.neutral strong { color: #cbd5e1; }
+          .overview-card-grid {
+            display: grid;
+            grid-template-columns: repeat(6, minmax(0, 1fr));
+            gap: 12px;
+            margin: 12px 0 18px;
+          }
+          .overview-card {
+            min-height: 116px;
+            border: 1px solid rgba(148, 163, 184, 0.16);
+            border-radius: 12px;
+            padding: 15px 16px;
+            background: rgba(15, 23, 42, 0.72);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            transition: transform 180ms ease, border-color 180ms ease, background 180ms ease;
+          }
+          .overview-card:hover {
+            transform: translateY(-1px);
+            border-color: rgba(56, 189, 248, 0.32);
+            background: rgba(15, 23, 42, 0.88);
+          }
+          .overview-card span {
+            color: #9cc4ee;
+            font-size: 12px;
+            font-weight: 720;
+            line-height: 1.25;
+          }
+          .overview-card strong {
+            color: #f8fafc;
+            font-size: clamp(23px, 1.7vw, 33px);
+            font-weight: 850;
+            line-height: 1.05;
+            font-variant-numeric: tabular-nums;
+            overflow-wrap: anywhere;
+          }
+          .overview-card em {
+            min-height: 30px;
+            color: #91a0b7;
+            font-style: normal;
+            font-size: 11px;
+            line-height: 1.35;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+          }
+          .overview-card.buy {
+            border-color: rgba(34, 197, 94, 0.28);
+            background: linear-gradient(135deg, rgba(34, 197, 94, 0.10), rgba(15, 23, 42, 0.76));
+          }
+          .overview-card.sell {
+            border-color: rgba(239, 68, 68, 0.28);
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.10), rgba(15, 23, 42, 0.76));
+          }
+          .overview-card.wait {
+            border-color: rgba(245, 158, 11, 0.28);
+            background: linear-gradient(135deg, rgba(245, 158, 11, 0.10), rgba(15, 23, 42, 0.76));
+          }
+          .overview-card.neutral {
+            border-color: rgba(148, 163, 184, 0.16);
+          }
+          .overview-card.buy strong { color: #22c55e; }
+          .overview-card.sell strong { color: #ef4444; }
+          .overview-card.wait strong { color: #f59e0b; }
+          .panel-title {
+            color: #f8fafc;
+            font-size: 15px;
+            font-weight: 820;
+            margin: 2px 0 12px;
+          }
+          div[data-testid="stPlotlyChart"] {
+            border: 1px solid rgba(148, 163, 184, 0.14);
+            border-radius: 12px;
+            overflow: hidden;
+            background: rgba(2, 6, 23, 0.30);
+          }
           .info-card-grid {
             display: grid;
             grid-template-columns: repeat(2, minmax(220px, 1fr));
             gap: 10px;
             margin-bottom: 14px;
+            align-items: stretch;
           }
           .info-card {
-            min-height: 92px;
+            min-height: 112px;
             padding: 13px 14px;
             border-radius: 10px;
             border: 1px solid rgba(148, 163, 184, 0.16);
@@ -1545,6 +1857,7 @@ def render_global_styles() -> None:
             align-items: end;
             padding: 14px;
             margin-bottom: 10px;
+            min-height: 90px;
             border: 1px solid rgba(56, 189, 248, 0.22);
             border-radius: 12px;
             background: linear-gradient(135deg, rgba(56, 189, 248, 0.11), rgba(15, 23, 42, 0.82));
@@ -1571,9 +1884,11 @@ def render_global_styles() -> None:
           }
           .factor-grid {
             display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 10px;
           }
           .factor-card {
+            min-height: 112px;
             padding: 12px;
             border-radius: 12px;
             border: 1px solid rgba(148, 163, 184, 0.16);
@@ -1677,6 +1992,36 @@ def render_global_styles() -> None:
             border-radius: 10px;
             overflow: hidden;
           }
+          .app-footer {
+            margin: 28px 0 6px;
+            padding: 18px 20px;
+            border-top: 1px solid rgba(148, 163, 184, 0.14);
+            color: #7f8da3;
+            text-align: center;
+          }
+          .app-footer div {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 6px;
+          }
+          .app-footer strong {
+            color: #c8d5e8;
+            font-size: 13px;
+            font-weight: 820;
+          }
+          .app-footer span,
+          .app-footer p {
+            color: #7f8da3;
+            font-size: 12px;
+            line-height: 1.5;
+          }
+          .app-footer p {
+            max-width: 860px;
+            margin: 0 auto;
+          }
           .stTabs [data-baseweb="tab-list"] {
             gap: 8px;
           }
@@ -1705,10 +2050,12 @@ def render_global_styles() -> None:
               transform: translateY(0);
             }
           }
-          @media (max-width: 900px) {
-            .terminal-header {
-              flex-direction: column;
+          @media (max-width: 1200px) {
+            .overview-card-grid {
+              grid-template-columns: repeat(3, minmax(0, 1fr));
             }
+          }
+          @media (max-width: 900px) {
             .terminal-grid {
               min-width: 0;
               grid-template-columns: repeat(2, minmax(120px, 1fr));
@@ -1716,7 +2063,13 @@ def render_global_styles() -> None:
             .signal-strip {
               grid-template-columns: repeat(2, minmax(120px, 1fr));
             }
+            .overview-card-grid {
+              grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
             .info-card-grid {
+              grid-template-columns: 1fr;
+            }
+            .factor-grid {
               grid-template-columns: 1fr;
             }
             .risk-card-grid {
