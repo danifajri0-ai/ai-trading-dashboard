@@ -1,65 +1,197 @@
 # AI Trading Dashboard
 
-Streamlit dashboard untuk analisis market berbasis data publik. Dashboard ini menghitung EMA, RSI, ATR, support-resistance, market bias, signal score, dan risk plan dalam tampilan trading desk modern.
+Trading dashboard dengan arsitektur layer bertahap:
+- Streamlit frontend (`apps/streamlit_app`)
+- FastAPI backend paralel (`apps/api`)
+- Service + domain terpisah untuk analisa
 
-## Fitur
+Dokumen ini fokus pada cara kerja arsitektur terbaru dan developer workflow.
 
-- Multi-asset: BTC/USD, ETH/USD, XAU/USD, EUR/USD, GBP/USD, USD/JPY.
-- Validasi kombinasi timeframe dan periode agar data lebih stabil.
-- Pro Chart dengan zoom, pan, crosshair, EMA, support, resistance, dan panel RSI.
-- Chart menjaga posisi zoom/pan saat auto-refresh pada market dan timeframe yang sama.
-- Refresh mode profesional: Smooth Refresh, Live Monitor, dan Manual Review.
-- Crypto BTC/ETH mencoba Binance public klines tanpa API key, lalu fallback ke Yahoo Finance.
-- Signal score berbasis trend, RSI, lokasi harga, volatilitas, dan risk-reward.
-- Risk plan dengan area entry, stop loss, take profit, dan rasio reward.
-- Overview modern dengan warna dinamis, panah tick naik/turun, dan status live/manual.
-- Data freshness indicator untuk membaca umur candle terakhir dan status data.
-- Best Setup Now card untuk merangkum entry zone, stop loss, take profit, confidence, dan invalidation note.
-- Market Radar untuk membandingkan semua pair pada timeframe aktif.
-- Decision Lab berisi backtest snapshot dan session signal history.
-- Panel detail untuk technical metrics, price action candle terakhir, market structure, ICT framework, risk, signal model, dan data integrity.
-- Modul terpisah untuk data market, indikator teknikal, sinyal, dan konteks market.
-
-## Tentang Realtime
-
-Dashboard ini memakai data publik. BTC/ETH mencoba Binance public klines tanpa API key; Forex/XAU memakai Yahoo Finance lewat `yfinance`. Ini belum setara broker tick feed seperti MetaTrader. Mode update memperbarui data, chart, dan sinyal secara berkala, tetapi data bisa delay, kosong, atau tidak berubah pada setiap refresh. Untuk eksekusi trading sungguhan, tetap validasi harga di broker.
-
-## Deploy Streamlit Community Cloud
-
-1. Push repository ke GitHub.
-2. Buka Streamlit Community Cloud.
-3. Pilih repository ini, branch `main`, dan main file `app.py`.
-4. Deploy. Dependencies akan di-install dari `requirements.txt`.
-
-File `.streamlit/config.toml` sudah disiapkan untuk tema dark profesional. Jangan commit file `.streamlit/secrets.toml`; gunakan Streamlit Secrets jika nanti menambahkan API token premium.
-
-## Menjalankan Aplikasi
-
-Cara paling mudah di Windows:
+## Struktur Folder Terbaru
 
 ```text
-Double click run_dashboard.bat
+ai_trading_dashboard_prototipe/
+├── apps/
+│   ├── streamlit_app/
+│   │   ├── app.py
+│   │   ├── client/
+│   │   └── ui/
+│   └── api/
+│       ├── main.py
+│       ├── routes/
+│       └── client_test.py
+├── domain/
+├── services/
+├── infrastructure/
+│   └── providers/
+├── schemas/
+├── config/
+├── tests/
+├── scripts/
+├── app.py                        # entrypoint lama (tetap tersedia)
+├── market_data.py                # wrapper/backward compatibility
+├── technical_analysis.py         # wrapper/backward compatibility
+├── ai_signal.py                  # wrapper/backward compatibility
+├── sentiment_news.py             # wrapper/backward compatibility
+├── requirements.txt
+└── run_dashboard.bat
 ```
 
-Cara manual:
+## Penjelasan Layer
+
+- `apps/streamlit_app`
+  - Frontend Streamlit.
+  - UI hanya merender `AnalysisResult`.
+  - Mode bisa `local_service` atau `http_api`.
+
+- `apps/api`
+  - Adapter HTTP (FastAPI).
+  - Tidak memanggil domain langsung.
+  - Endpoint:
+    - `GET /health`
+    - `GET /symbols`
+    - `POST /analyze`
+
+- `domain`
+  - Pure analysis logic (indikator, signal engine, risk engine, market regime, sentiment engine).
+  - Tidak import Streamlit.
+  - Tidak mengambil data market langsung.
+
+- `services`
+  - Facade use-case.
+  - `market_data_service.py`: akses data market terstandar.
+  - `analysis_service.py`: satu pintu analisa `analyze_market(symbol, timeframe)`.
+
+- `infrastructure`
+  - Integrasi provider eksternal / data source.
+  - `providers/market_data_provider.py`
+  - `providers/news_provider.py`
+  - `providers/cache_provider.py`
+
+- `schemas`
+  - Kontrak DTO, terutama `AnalysisResult` dkk.
+
+- `config`
+  - Konfigurasi aplikasi (`settings.py`), termasuk mode:
+    - `local_service`
+    - `http_api`
+
+- `tests`
+  - Unit test service/domain/schema + boundary checks.
+
+## Setup Cepat
 
 ```powershell
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
-streamlit run app.py
 ```
 
-Jika `venv` lama bermasalah, hapus atau rename folder `venv` lalu buat ulang dengan perintah di atas.
+## Menjalankan Streamlit (local_service mode)
 
-## Struktur
+Opsi 1 (direkomendasikan):
 
-- `app.py`: UI Streamlit dan orchestration.
-- `market_data.py`: pair, validasi request, download, dan normalisasi data.
-- `technical_analysis.py`: EMA, RSI, ATR, trend, level, dan risk plan.
-- `ai_signal.py`: scoring sinyal berbasis aturan.
-- `sentiment_news.py`: konteks market dan checklist sebelum entry.
+```text
+scripts\run_streamlit.bat
+```
+
+Opsi 2 manual:
+
+```powershell
+venv\Scripts\python.exe -m streamlit run apps/streamlit_app/app.py
+```
+
+Mode default saat ini ada di `config/settings.py`:
+
+```python
+mode: AppMode = "local_service"
+```
+
+## Menjalankan FastAPI
+
+Opsi 1 (direkomendasikan):
+
+```text
+scripts\run_api.bat
+```
+
+Opsi 2 manual:
+
+```powershell
+venv\Scripts\python.exe -m uvicorn apps.api.main:app --host 127.0.0.1 --port 8000 --reload
+```
+
+API docs:
+- http://127.0.0.1:8000/docs
+
+## Mengganti Mode ke `http_api`
+
+Edit file [config/settings.py](</C:/Users/Diel2011/Documents/Project LLM/ai_trading_dashboard_prototipe/config/settings.py>):
+
+```python
+mode: AppMode = "http_api"
+```
+
+Alur saat `http_api`:
+1. Streamlit memanggil API client (`apps/streamlit_app/client/api_client.py`).
+2. Jika backend gagal, UI menampilkan error jelas.
+3. Dashboard fallback otomatis ke `local_service`.
+
+## Menjalankan Pytest
+
+Cara menjalankan test:
+
+```text
+scripts\run_tests.bat
+```
+
+Opsi 1:
+
+```text
+scripts\run_tests.bat
+```
+
+Opsi 2 manual:
+
+```powershell
+venv\Scripts\python.exe -m pytest -q
+```
+
+## Cara Menambah Symbol Baru
+
+1. Tambahkan simbol di [config/settings.py](</C:/Users/Diel2011/Documents/Project LLM/ai_trading_dashboard_prototipe/config/settings.py>) pada `supported_symbols`.
+2. Tambahkan mapping simbol ke provider symbol di:
+   - [services/market_data_service.py](</C:/Users/Diel2011/Documents/Project LLM/ai_trading_dashboard_prototipe/services/market_data_service.py>)
+   - bagian `provider_symbol_map`.
+3. (Opsional) Tambahkan konteks aset di:
+   - [domain/sentiment_engine.py](</C:/Users/Diel2011/Documents/Project LLM/ai_trading_dashboard_prototipe/domain/sentiment_engine.py>)
+4. Jalankan test:
+   - `scripts\run_tests.bat`
+
+## Cara Menambah Provider Market Data Baru
+
+1. Buat provider baru di `infrastructure/providers/` (contoh: `new_feed_provider.py`).
+2. Pastikan provider hanya mengembalikan data mentah/awal (tanpa hitung signal).
+3. Integrasikan provider di:
+   - [infrastructure/providers/market_data_provider.py](</C:/Users/Diel2011/Documents/Project LLM/ai_trading_dashboard_prototipe/infrastructure/providers/market_data_provider.py>)
+   - sebagai primary/fallback source.
+4. Pastikan output akhirnya tetap format konsisten:
+   - `Timestamp, Open, High, Low, Close, Volume`
+5. Validasi dengan:
+   - `scripts\run_tests.bat`
+
+## Script Windows
+
+- `scripts/run_streamlit.bat`
+  - Menjalankan Streamlit app baru (`apps/streamlit_app/app.py`).
+- `scripts/run_api.bat`
+  - Menjalankan FastAPI (`apps.api.main:app`).
+- `scripts/run_tests.bat`
+  - Menjalankan test suite (`pytest -q`).
 
 ## Catatan
 
-Dashboard ini hanya alat bantu analisis dan edukasi, bukan sinyal trading pasti. Tetap gunakan validasi price action, money management, dan kalender berita.
+- Arsitektur lama tetap tersedia untuk compatibility.
+- `app.py` di root berstatus legacy/deprecated dan bukan launcher utama.
+- Fokus produksi baru diarahkan ke layer `apps/ + services/ + domain/ + infrastructure/ + schemas/`.
+- `apps/streamlit_app/ui/renderer_legacy.py` adalah renderer UI lama yang sudah tidak dipakai launcher utama; dipertahankan sementara untuk referensi migrasi.
