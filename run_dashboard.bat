@@ -45,7 +45,7 @@ echo.
 echo Starting Streamlit dashboard...
 echo Browser should open automatically. If not, copy the local URL shown below.
 echo.
-"%PYTHON_EXE%" -m streamlit run app.py
+"%PYTHON_EXE%" -m streamlit run apps/streamlit_app/app.py
 goto :end
 
 :create_venv

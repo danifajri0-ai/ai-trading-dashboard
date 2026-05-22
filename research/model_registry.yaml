@@ -1,0 +1,130 @@
+version: 1
+scope: research_only
+runtime_connected: false
+description: Lightweight institutional trading layer model registry for the initial safe phase.
+models:
+  - id: volatility_regime_lite
+    name: Volatility Regime Lite
+    category: regime
+    description: Classifies current volatility using ATR percent and, when available, a lightweight realized volatility proxy.
+    inputs:
+      - atr
+      - atr_percent
+      - close_prices
+      - timeframe
+    outputs:
+      - volatility_label
+      - atr_percent
+      - realized_vol_proxy
+      - reasons
+    formula_summary: "Use ATR percent thresholds and optional rolling return volatility to classify Unknown, Calm, Normal, or High Volatility."
+    weight: 0.18
+    active: true
+    implementation_status: planned_research_only_not_runtime_connected
+
+  - id: trend_quality_lite
+    name: Trend Quality Lite
+    category: regime
+    description: Scores trend quality from existing EMA alignment, price location, and momentum confirmation without replacing legacy signal logic.
+    inputs:
+      - latest_close
+      - ema_fast
+      - ema_slow
+      - moving_average
+      - macd_histogram
+      - rsi
+    outputs:
+      - trend_quality_score
+      - trend_alignment
+      - momentum_confirmation
+      - reasons
+    formula_summary: "Combine EMA alignment, close versus moving averages, MACD histogram direction, and RSI sanity range into a bounded 0-100 trend quality score."
+    weight: 0.20
+    active: true
+    implementation_status: planned_research_only_not_runtime_connected
+
+  - id: robust_zscore_lite
+    name: Robust Z-Score Lite
+    category: feature_standardization
+    description: Standardizes lightweight features with median and MAD so signal components can be compared without adding heavy models.
+    inputs:
+      - close_returns
+      - rsi
+      - macd_histogram
+      - atr_percent
+      - rolling_window
+    outputs:
+      - trend_z
+      - momentum_z
+      - volatility_z
+      - sample_quality
+    formula_summary: "z = clip((x - rolling_median) / rolling_MAD, -3, 3), with safe fallback when MAD is zero or sample length is low."
+    weight: 0.16
+    active: true
+    implementation_status: planned_research_only_not_runtime_connected
+
+  - id: signal_contribution_lite
+    name: Signal Contribution Lite
+    category: explainability
+    description: Produces an explainable contribution breakdown from existing signal components while preserving the old signal and confidence outputs.
+    inputs:
+      - trend_score
+      - rsi_score
+      - macd_score
+      - price_location_score
+      - volatility_score
+      - risk_plan_score
+    outputs:
+      - components
+      - total_score
+      - contribution_percentages
+      - dominant_driver
+    formula_summary: "total = sum(component_score); contribution_i = component_score_i / max(abs(total), epsilon)."
+    weight: 0.18
+    active: true
+    implementation_status: planned_research_only_not_runtime_connected
+
+  - id: atr_risk_lite
+    name: ATR Risk Lite
+    category: risk
+    description: Summarizes trade risk using existing ATR, entry, stop loss, take profit, and risk-reward fields.
+    inputs:
+      - atr
+      - atr_percent
+      - entry_area
+      - stop_loss
+      - take_profit
+      - risk_reward
+    outputs:
+      - stop_distance
+      - stop_distance_atr
+      - reward_distance
+      - risk_reward
+      - atr_risk_label
+      - notes
+    formula_summary: "stop_distance_atr = abs(entry_area - stop_loss) / max(ATR, epsilon); risk_reward remains the existing reward divided by risk."
+    weight: 0.14
+    active: true
+    implementation_status: planned_research_only_not_runtime_connected
+
+  - id: risk_gate_lite
+    name: Risk Gate Lite
+    category: risk_gate
+    description: Provides a diagnostic PASS, CAUTION, or BLOCK gate from existing confidence, risk level, volatility, data availability, and risk-reward.
+    inputs:
+      - signal
+      - confidence
+      - risk_level
+      - atr_percent
+      - risk_reward
+      - data_status
+      - warnings
+    outputs:
+      - gate_status
+      - gate_score
+      - blocking_reasons
+      - caution_reasons
+    formula_summary: "Start from confidence, subtract penalties for high volatility, weak risk-reward, unavailable data, WAIT signal, or high risk level; map score to PASS, CAUTION, or BLOCK."
+    weight: 0.14
+    active: true
+    implementation_status: planned_research_only_not_runtime_connected

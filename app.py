@@ -1,16 +1,16 @@
 from __future__ import annotations
 
+# LEGACY APP - Jangan gunakan file ini untuk development baru.
+# Gunakan apps/streamlit_app/app.py sebagai entrypoint utama.
+
 from dataclasses import dataclass
 from datetime import datetime
-import json
-import math
 import time
 
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 import streamlit as st
-import streamlit.components.v1 as components
 
 try:
     from streamlit_autorefresh import st_autorefresh
@@ -47,6 +47,11 @@ st.set_page_config(
     page_title="AI Trading Dashboard",
     layout="wide",
     initial_sidebar_state="expanded",
+)
+
+st.warning(
+    "LEGACY APP - Jangan gunakan file ini untuk development baru. "
+    "Gunakan apps/streamlit_app/app.py sebagai entrypoint utama."
 )
 
 
@@ -680,338 +685,6 @@ def render_chart(
     )
 
 
-def render_lightweight_chart(
-    data: pd.DataFrame,
-    request: MarketRequest,
-    levels: MarketLevels,
-    settings: IndicatorSettings,
-    runtime: RuntimeSettings,
-) -> None:
-    payload = build_lightweight_payload(data, settings)
-    chart_id = f"tv_chart_{request.label.replace('/', '_').replace('=', '_')}_{request.interval}_{request.period}"
-    storage_key = f"aiTradingDashboard.range.{request.label}.{request.period}.{request.interval}"
-    follow_latest_default = True
-    support = _json_number(levels.support)
-    resistance = _json_number(levels.resistance)
-
-    html = f"""
-    <div class="tv-shell">
-      <div class="tv-toolbar">
-        <div>
-          <span class="tv-symbol">{request.label}</span>
-          <span class="tv-meta">{request.interval} / {request.period} / stable viewport</span>
-        </div>
-        <div class="tv-legend">
-          <span><i class="up"></i>Bull</span>
-          <span><i class="down"></i>Bear</span>
-          <span><i class="ema-fast"></i>EMA {settings.ema_fast}</span>
-          <span><i class="ema-slow"></i>EMA {settings.ema_slow}</span>
-          <button id="{chart_id}_follow" class="tv-reset" type="button">Follow Latest</button>
-          <button id="{chart_id}_reset" class="tv-reset" type="button">Reset View</button>
-        </div>
-      </div>
-      <div id="{chart_id}_price" class="tv-chart price"></div>
-      <div id="{chart_id}_rsi" class="tv-chart rsi"></div>
-    </div>
-    <script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
-    <script>
-      const payload = {json.dumps(payload)};
-      const storageKey = {json.dumps(storage_key)};
-      const followLatestDefault = {json.dumps(follow_latest_default)};
-      const priceEl = document.getElementById("{chart_id}_price");
-      const rsiEl = document.getElementById("{chart_id}_rsi");
-      const resetButton = document.getElementById("{chart_id}_reset");
-      const followButton = document.getElementById("{chart_id}_follow");
-      const followKey = storageKey + ".follow";
-      if (!window.LightweightCharts) {{
-        priceEl.innerHTML = '<div class="tv-error">Chart alternatif tidak berhasil dimuat. Gunakan Pro Chart utama untuk tampilan yang lebih stabil.</div>';
-        rsiEl.style.display = "none";
-      }} else {{
-      const common = {{
-        layout: {{
-          background: {{ type: "solid", color: "#08111f" }},
-          textColor: "#c8d3e6",
-          fontFamily: "Inter, Segoe UI, sans-serif"
-        }},
-        grid: {{
-          vertLines: {{ color: "rgba(148, 163, 184, 0.10)" }},
-          horzLines: {{ color: "rgba(148, 163, 184, 0.10)" }}
-        }},
-        crosshair: {{ mode: LightweightCharts.CrosshairMode.Normal }},
-        rightPriceScale: {{ borderColor: "rgba(148, 163, 184, 0.22)" }},
-        timeScale: {{
-          borderColor: "rgba(148, 163, 184, 0.22)",
-          timeVisible: true,
-          secondsVisible: false
-        }},
-        localization: {{ priceFormatter: price => Number(price).toLocaleString(undefined, {{ maximumFractionDigits: 5 }}) }}
-      }};
-
-      const priceChart = LightweightCharts.createChart(priceEl, {{
-        ...common,
-        width: priceEl.clientWidth,
-        height: 520
-      }});
-      const candleSeries = priceChart.addCandlestickSeries({{
-        upColor: "#22c55e",
-        downColor: "#ef4444",
-        borderUpColor: "#22c55e",
-        borderDownColor: "#ef4444",
-        wickUpColor: "#22c55e",
-        wickDownColor: "#ef4444"
-      }});
-      candleSeries.setData(payload.candles);
-
-      const emaFast = priceChart.addLineSeries({{ color: "#38bdf8", lineWidth: 2, priceLineVisible: false }});
-      emaFast.setData(payload.emaFast);
-      const emaSlow = priceChart.addLineSeries({{ color: "#f59e0b", lineWidth: 2, priceLineVisible: false }});
-      emaSlow.setData(payload.emaSlow);
-
-      if (payload.volume.length > 0) {{
-        const volumeSeries = priceChart.addHistogramSeries({{
-          priceFormat: {{ type: "volume" }},
-          priceScaleId: "",
-          color: "rgba(148, 163, 184, 0.22)"
-        }});
-        priceChart.priceScale("").applyOptions({{ scaleMargins: {{ top: 0.82, bottom: 0 }} }});
-        volumeSeries.setData(payload.volume);
-      }}
-
-      candleSeries.createPriceLine({{
-        price: {support},
-        color: "#22c55e",
-        lineWidth: 1,
-        lineStyle: LightweightCharts.LineStyle.Dashed,
-        axisLabelVisible: true,
-        title: "Support"
-      }});
-      candleSeries.createPriceLine({{
-        price: {resistance},
-        color: "#ef4444",
-        lineWidth: 1,
-        lineStyle: LightweightCharts.LineStyle.Dashed,
-        axisLabelVisible: true,
-        title: "Resistance"
-      }});
-
-      const rsiChart = LightweightCharts.createChart(rsiEl, {{
-        ...common,
-        width: rsiEl.clientWidth,
-        height: 160
-      }});
-      const rsiSeries = rsiChart.addLineSeries({{ color: "#eab308", lineWidth: 2, priceLineVisible: false }});
-      rsiSeries.setData(payload.rsi);
-      rsiSeries.createPriceLine({{ price: 70, color: "#ef4444", lineStyle: LightweightCharts.LineStyle.Dotted, title: "70" }});
-      rsiSeries.createPriceLine({{ price: 30, color: "#22c55e", lineStyle: LightweightCharts.LineStyle.Dotted, title: "30" }});
-
-      let restoring = true;
-      let syncing = false;
-      let userInteracted = false;
-      let saveTimer = null;
-
-      function readStore(key) {{
-        try {{
-          const parentValue = window.parent && window.parent.localStorage ? window.parent.localStorage.getItem(key) : null;
-          if (parentValue !== null) return parentValue;
-        }} catch (error) {{}}
-        try {{ return window.localStorage.getItem(key); }} catch (error) {{ return null; }}
-      }}
-
-      function writeStore(key, value) {{
-        try {{
-          if (window.parent && window.parent.localStorage) window.parent.localStorage.setItem(key, value);
-        }} catch (error) {{}}
-        try {{ window.localStorage.setItem(key, value); }} catch (error) {{}}
-      }}
-
-      function removeStore(key) {{
-        try {{
-          if (window.parent && window.parent.localStorage) window.parent.localStorage.removeItem(key);
-        }} catch (error) {{}}
-        try {{ window.localStorage.removeItem(key); }} catch (error) {{}}
-      }}
-
-      function setFollowState(enabled) {{
-        writeStore(followKey, enabled ? "1" : "0");
-        followButton.classList.toggle("active", enabled);
-      }}
-
-      function isFollowLatest() {{
-        const stored = readStore(followKey);
-        if (stored === null) return followLatestDefault;
-        return stored === "1";
-      }}
-
-      function fitBoth() {{
-        priceChart.timeScale().fitContent();
-        rsiChart.timeScale().fitContent();
-      }}
-
-      function followLatest() {{
-        priceChart.timeScale().scrollToRealTime();
-        rsiChart.timeScale().scrollToRealTime();
-      }}
-
-      function restoreRange() {{
-        try {{
-          if (isFollowLatest()) {{
-            followLatest();
-            return;
-          }}
-          const stored = readStore(storageKey);
-          if (!stored) {{
-            fitBoth();
-            return;
-          }}
-          const range = JSON.parse(stored);
-          if (range && Number.isFinite(range.from) && Number.isFinite(range.to) && range.to > range.from) {{
-            priceChart.timeScale().setVisibleLogicalRange(range);
-            rsiChart.timeScale().setVisibleLogicalRange(range);
-          }} else {{
-            fitBoth();
-          }}
-        }} catch (error) {{
-          fitBoth();
-        }}
-      }}
-
-      function saveRange(range) {{
-        if (restoring || syncing || !userInteracted || isFollowLatest()) return;
-        if (!range || !Number.isFinite(range.from) || !Number.isFinite(range.to) || range.to <= range.from) return;
-        window.clearTimeout(saveTimer);
-        saveTimer = window.setTimeout(() => {{
-          writeStore(storageKey, JSON.stringify(range));
-        }}, 120);
-      }}
-
-      function markManualInteraction() {{
-        userInteracted = true;
-        setFollowState(false);
-      }}
-
-      ["wheel", "mousedown", "touchstart"].forEach(eventName => {{
-        priceEl.addEventListener(eventName, markManualInteraction, {{ passive: true }});
-        rsiEl.addEventListener(eventName, markManualInteraction, {{ passive: true }});
-      }});
-
-      priceChart.timeScale().subscribeVisibleLogicalRangeChange(range => {{
-        if (syncing) return;
-        syncing = true;
-        if (range) {{
-          rsiChart.timeScale().setVisibleLogicalRange(range);
-          saveRange(range);
-        }}
-        window.requestAnimationFrame(() => {{ syncing = false; }});
-      }});
-      rsiChart.timeScale().subscribeVisibleLogicalRangeChange(range => {{
-        if (syncing) return;
-        syncing = true;
-        if (range) {{
-          priceChart.timeScale().setVisibleLogicalRange(range);
-          saveRange(range);
-        }}
-        window.requestAnimationFrame(() => {{ syncing = false; }});
-      }});
-
-      followButton.addEventListener("click", () => {{
-        userInteracted = false;
-        setFollowState(true);
-        followLatest();
-      }});
-
-      resetButton.addEventListener("click", () => {{
-        removeStore(storageKey);
-        userInteracted = false;
-        setFollowState(false);
-        fitBoth();
-      }});
-
-      restoreRange();
-      setFollowState(isFollowLatest());
-      window.setTimeout(() => {{ restoring = false; }}, 400);
-
-      window.addEventListener("resize", () => {{
-        priceChart.applyOptions({{ width: priceEl.clientWidth }});
-        rsiChart.applyOptions({{ width: rsiEl.clientWidth }});
-      }});
-      }}
-    </script>
-    <style>
-      .tv-shell {{
-        background: #08111f;
-        border: 1px solid rgba(148, 163, 184, 0.18);
-        border-radius: 10px;
-        overflow: hidden;
-        font-family: Inter, Segoe UI, sans-serif;
-      }}
-      .tv-toolbar {{
-        height: 48px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 0 14px;
-        background: #0c1628;
-        border-bottom: 1px solid rgba(148, 163, 184, 0.16);
-      }}
-      .tv-symbol {{
-        color: #f8fafc;
-        font-weight: 750;
-        margin-right: 10px;
-      }}
-      .tv-meta, .tv-legend {{
-        color: #94a3b8;
-        font-size: 12px;
-      }}
-      .tv-legend {{
-        display: flex;
-        gap: 12px;
-        align-items: center;
-        flex-wrap: wrap;
-      }}
-      .tv-legend i {{
-        display: inline-block;
-        width: 10px;
-        height: 3px;
-        margin-right: 5px;
-        vertical-align: middle;
-      }}
-      .tv-legend .up {{ background: #22c55e; }}
-      .tv-legend .down {{ background: #ef4444; }}
-      .tv-legend .ema-fast {{ background: #38bdf8; }}
-      .tv-legend .ema-slow {{ background: #f59e0b; }}
-      .tv-chart {{ width: 100%; }}
-      .tv-chart.rsi {{ border-top: 1px solid rgba(148, 163, 184, 0.14); }}
-      .tv-error {{
-        min-height: 520px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        padding: 20px;
-        color: #fbbf24;
-        text-align: center;
-        font-size: 14px;
-      }}
-      .tv-reset {{
-        border: 1px solid rgba(148, 163, 184, 0.26);
-        border-radius: 7px;
-        background: rgba(15, 23, 42, 0.92);
-        color: #dbeafe;
-        font-size: 12px;
-        padding: 6px 10px;
-        cursor: pointer;
-        transition: border-color 160ms ease, color 160ms ease, background 160ms ease, transform 160ms ease;
-      }}
-      .tv-reset:hover {{ border-color: rgba(56, 189, 248, 0.72); color: #f8fafc; }}
-      .tv-reset.active {{
-        border-color: rgba(34, 197, 94, 0.58);
-        background: rgba(34, 197, 94, 0.14);
-        color: #dcfce7;
-      }}
-    </style>
-    """
-    components.html(html, height=760, scrolling=False)
-
-
 def render_plotly_chart(
     data: pd.DataFrame,
     request: MarketRequest,
@@ -1357,58 +1030,6 @@ def render_footer() -> None:
     )
 
 
-def build_lightweight_payload(data: pd.DataFrame, settings: IndicatorSettings) -> dict[str, list[dict[str, float | int | str]]]:
-    chart_data = data.tail(1500).copy()
-    candles: list[dict[str, float | int | str]] = []
-    ema_fast: list[dict[str, float | int | str]] = []
-    ema_slow: list[dict[str, float | int | str]] = []
-    rsi: list[dict[str, float | int | str]] = []
-    volume: list[dict[str, float | int | str]] = []
-
-    for row in chart_data.itertuples(index=False):
-        row_data = row._asdict()
-        timestamp = timestamp_to_chart_time(row_data["Timestamp"])
-        open_price = _float_or_none(row_data["Open"])
-        high_price = _float_or_none(row_data["High"])
-        low_price = _float_or_none(row_data["Low"])
-        close_price = _float_or_none(row_data["Close"])
-        if None in (open_price, high_price, low_price, close_price):
-            continue
-
-        candles.append(
-            {
-                "time": timestamp,
-                "open": open_price,
-                "high": high_price,
-                "low": low_price,
-                "close": close_price,
-            }
-        )
-        add_line_point(ema_fast, timestamp, row_data.get("EMA_FAST"))
-        add_line_point(ema_slow, timestamp, row_data.get("EMA_SLOW"))
-        add_line_point(rsi, timestamp, row_data.get("RSI"))
-
-        volume_value = _float_or_none(row_data.get("Volume"))
-        if volume_value and volume_value > 0:
-            color = "rgba(34, 197, 94, 0.28)" if close_price >= open_price else "rgba(239, 68, 68, 0.28)"
-            volume.append({"time": timestamp, "value": volume_value, "color": color})
-
-    del settings
-    return {
-        "candles": candles,
-        "emaFast": ema_fast,
-        "emaSlow": ema_slow,
-        "rsi": rsi,
-        "volume": volume,
-    }
-
-
-def add_line_point(target: list[dict[str, float | int | str]], timestamp: int, value: object) -> None:
-    number = _float_or_none(value)
-    if number is not None:
-        target.append({"time": timestamp, "value": number})
-
-
 def build_candle_profile(data: pd.DataFrame) -> dict[str, str]:
     last = data.iloc[-1]
     open_price = float(last["Open"])
@@ -1455,7 +1076,7 @@ def calculate_price_movement(data: pd.DataFrame) -> PriceMovement:
     if change > 0:
         return PriceMovement(
             direction="up",
-            arrow="▲",
+            arrow="UP",
             css_class="buy",
             change=change,
             change_percent=change_percent,
@@ -1464,7 +1085,7 @@ def calculate_price_movement(data: pd.DataFrame) -> PriceMovement:
     if change < 0:
         return PriceMovement(
             direction="down",
-            arrow="▼",
+            arrow="DOWN",
             css_class="sell",
             change=change,
             change_percent=change_percent,
@@ -1968,33 +1589,12 @@ def interpret_ema_spread(ema_spread: float, latest_close: float) -> str:
     return f"{direction}, tetapi jarak EMA masih tipis ({spread_percent:.2f}%)."
 
 
-def timestamp_to_chart_time(value: object) -> int:
-    timestamp = pd.Timestamp(value)
-    if timestamp.tzinfo is None:
-        timestamp = timestamp.tz_localize("UTC")
-    return int(timestamp.timestamp())
-
-
 def format_timestamp(value: object) -> str:
     try:
         timestamp = pd.Timestamp(value)
         return timestamp.strftime("%Y-%m-%d %H:%M")
     except Exception:
         return str(value)
-
-
-def _float_or_none(value: object) -> float | None:
-    try:
-        number = float(value)
-    except (TypeError, ValueError):
-        return None
-    if not math.isfinite(number):
-        return None
-    return round(number, 8)
-
-
-def _json_number(value: float) -> str:
-    return json.dumps(round(float(value), 8))
 
 
 def render_global_styles() -> None:
