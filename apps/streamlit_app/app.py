@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
+import sys
 
 import pandas as pd
 import streamlit as st
@@ -10,6 +12,10 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     st_autorefresh = None
 
+# Ensure project root is importable when Streamlit runs this file directly.
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 from apps.streamlit_app.client.api_client import ApiClientError, analyze_market_http, get_symbols
 from apps.streamlit_app.ui import (
     render_chart_panel,
