@@ -12,6 +12,11 @@ Endpoint aktif:
 3. `GET /symbols`
 4. `POST /analyze`
 5. `POST /cockpit/analyze`
+6. `POST /api/analysis/logs`
+7. `GET /api/analysis/history`
+8. `POST /api/watchlist`
+9. `GET /api/watchlist`
+10. `DELETE /api/watchlist/{id}`
 
 ## 2) Detail Endpoint
 
@@ -53,7 +58,8 @@ Endpoint aktif:
 ```json
 {
   "symbol": "BTCUSD",
-  "timeframe": "H1"
+  "timeframe": "H1",
+  "save_to_history": false
 }
 ```
 - Success response: serialisasi `schemas.dto.AnalysisResult` (via `dataclasses.asdict`).
@@ -73,6 +79,11 @@ Endpoint aktif:
 - Error behavior:
   - `400` untuk input invalid (ValueError)
   - `503` untuk service unavailable
+
+Catatan non-breaking:
+- `save_to_history` bersifat opsional (`default=false`).
+- Response utama `/analyze` tidak berubah.
+- Jika persistence Supabase disabled, analisa tetap sukses.
 
 ## `POST /cockpit/analyze`
 - File route: `apps/api/routes/cockpit.py`
@@ -108,6 +119,83 @@ Endpoint aktif:
 - Error behavior:
   - `400` untuk input invalid
   - `503` untuk service unavailable
+
+## `POST /api/analysis/logs`
+- Tujuan: simpan log analisis ke persistence layer.
+- Request body:
+```json
+{
+  "symbol": "BTCUSD",
+  "timeframe": "H1",
+  "signal": "BUY",
+  "bias": "BULLISH",
+  "confidence": 72.5,
+  "summary": "Trend dan momentum searah",
+  "raw_payload": {},
+  "created_at": "optional-iso-timestamp"
+}
+```
+- Success response: row `analysis_logs` yang tersimpan.
+- Error behavior:
+  - `503` jika Supabase disabled/unavailable.
+
+## `GET /api/analysis/history`
+- Tujuan: ambil histori analisis.
+- Query param:
+  - `limit` (default 50, max 500)
+  - `symbol` (optional)
+  - `timeframe` (optional)
+- Success response:
+```json
+{
+  "items": [],
+  "count": 0
+}
+```
+- Error behavior:
+  - `503` jika Supabase disabled/unavailable.
+
+## `POST /api/watchlist`
+- Tujuan: tambah item watchlist.
+- Request body:
+```json
+{
+  "symbol": "BTCUSD",
+  "market_type": "crypto",
+  "notes": "optional",
+  "created_at": "optional-iso-timestamp"
+}
+```
+- Success response: row `watchlists` yang tersimpan.
+- Error behavior:
+  - `503` jika Supabase disabled/unavailable.
+
+## `GET /api/watchlist`
+- Tujuan: ambil daftar watchlist.
+- Query param:
+  - `limit` (default 200, max 500)
+- Success response:
+```json
+{
+  "items": [],
+  "count": 0
+}
+```
+- Error behavior:
+  - `503` jika Supabase disabled/unavailable.
+
+## `DELETE /api/watchlist/{id}`
+- Tujuan: hapus item watchlist berdasarkan id.
+- Success response:
+```json
+{
+  "status": "deleted",
+  "id": "123"
+}
+```
+- Error behavior:
+  - `404` jika id tidak ditemukan
+  - `503` jika Supabase disabled/unavailable
 
 ## 3) Schema Utama yang Dipakai
 

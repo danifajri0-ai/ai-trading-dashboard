@@ -3,6 +3,7 @@ from .settings import (
     AppMode,
     IndicatorSettings,
     RiskSettings,
+    SupabaseSettings,
     TradingDashboardSettings,
 )
 from .feature_flags import FEATURE_FLAGS, FeatureTier, normalize_tier
@@ -12,6 +13,7 @@ __all__ = [
     "AppMode",
     "IndicatorSettings",
     "RiskSettings",
+    "SupabaseSettings",
     "TradingDashboardSettings",
     "FEATURE_FLAGS",
     "FeatureTier",
