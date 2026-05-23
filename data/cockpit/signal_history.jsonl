@@ -1,0 +1,11 @@
+{"backtest_status": "available", "confidence": 84.0, "recorded_at": "2026-05-22T19:56:01.573492+00:00", "risk_level": "low", "signal": "SELL", "symbol": "BTCUSD", "timeframe": "H1", "valid_signal": true}
+{"backtest_status": "available", "confidence": 84.0, "recorded_at": "2026-05-22T19:56:33.610353+00:00", "risk_level": "low", "signal": "SELL", "symbol": "BTCUSD", "timeframe": "H1", "valid_signal": true}
+{"backtest_status": "available", "confidence": 84.0, "recorded_at": "2026-05-22T19:57:36.816062+00:00", "risk_level": "low", "signal": "SELL", "symbol": "BTCUSD", "timeframe": "H1", "valid_signal": true}
+{"backtest_status": "available", "confidence": 98.0, "recorded_at": "2026-05-23T01:04:59.512893+00:00", "risk_level": "low", "signal": "BUY", "symbol": "BTCUSD", "timeframe": "H1", "valid_signal": true}
+{"backtest_status": "available", "confidence": 84.0, "recorded_at": "2026-05-23T01:06:03.424107+00:00", "risk_level": "low", "signal": "SELL", "symbol": "BTCUSD", "timeframe": "H1", "valid_signal": true}
+{"backtest_status": "available", "confidence": 84.0, "recorded_at": "2026-05-23T01:06:22.834796+00:00", "risk_level": "low", "signal": "SELL", "symbol": "BTCUSD", "timeframe": "H1", "valid_signal": true}
+{"backtest_status": "available", "confidence": 98.0, "recorded_at": "2026-05-23T01:22:35.684654+00:00", "risk_level": "low", "signal": "BUY", "symbol": "BTCUSD", "timeframe": "H1", "valid_signal": true}
+{"backtest_status": "available", "confidence": 84.0, "recorded_at": "2026-05-23T01:39:56.682799+00:00", "risk_level": "low", "signal": "SELL", "symbol": "BTCUSD", "timeframe": "H1", "valid_signal": true}
+{"backtest_status": "available", "confidence": 98.0, "recorded_at": "2026-05-23T01:50:48.977542+00:00", "risk_level": "low", "signal": "BUY", "symbol": "BTCUSD", "timeframe": "H1", "valid_signal": true}
+{"backtest_status": "available", "confidence": 98.0, "recorded_at": "2026-05-23T01:51:57.237974+00:00", "risk_level": "low", "signal": "BUY", "symbol": "BTCUSD", "timeframe": "H1", "valid_signal": true}
+{"backtest_status": "available", "confidence": 84.0, "recorded_at": "2026-05-23T01:53:17.771608+00:00", "risk_level": "low", "signal": "SELL", "symbol": "BTCUSD", "timeframe": "H1", "valid_signal": true}
