@@ -25,9 +25,11 @@ from apps.streamlit_app.ui import (
     render_signal_card,
     render_warning_panel,
 )
+from apps.streamlit_app.ui.cockpit_renderer import render_cockpit
 from config import SETTINGS
-from schemas import AnalysisResult
+from schemas import AnalysisResult, CockpitAnalysisResult
 from services.analysis_service import analyze_market
+from services.cockpit_service import analyze_cockpit_market
 from services.market_data_service import get_market_data, get_supported_symbols, get_supported_timeframes
 
 
@@ -39,13 +41,29 @@ def main() -> None:
 
     symbols, timeframes = _load_market_options_cached()
     symbol, timeframe = render_sidebar(symbols=symbols, timeframes=timeframes)
+    use_cockpit_v2 = st.sidebar.toggle("Rich Cockpit v2", value=True)
     show_radar = bool(st.session_state.get("show_radar", True))
     radar_pair_limit = int(st.session_state.get("radar_pair_limit", 3))
     show_decision_lab = bool(st.session_state.get("show_decision_lab", True))
     _apply_auto_refresh(st.session_state.get("refresh_interval_label", "No Interval"))
 
     try:
-        with st.spinner("Menganalisis market..."):
+        with st.spinner("Menganalisis market cockpit..."):
+            if use_cockpit_v2:
+                cockpit_result, analysis_source = _analyze_cockpit(symbol, timeframe)
+                result = cockpit_result.legacy_result
+                radar_rows = []
+                st.session_state["last_cockpit_result"] = cockpit_result
+                st.session_state["last_result"] = result
+                st.session_state["last_market_frame"] = pd.DataFrame()
+                st.session_state["last_radar"] = radar_rows
+                st.session_state["last_analysis_source"] = analysis_source
+                _append_signal_history(result)
+                _append_lite_availability_metrics(result)
+                _render_source_banner(analysis_source)
+                render_cockpit(cockpit_result, source=analysis_source)
+                return
+
             result, analysis_source = _analyze_market(symbol, timeframe)
             market_frame = get_market_data(symbol, timeframe)
             radar_rows = _build_market_radar(symbols, timeframe, result, radar_pair_limit) if show_radar else []
@@ -291,12 +309,28 @@ def _analyze_market(symbol: str, timeframe: str) -> tuple[AnalysisResult, str]:
     return analyze_market(symbol, timeframe), "local"
 
 
+def _analyze_cockpit(symbol: str, timeframe: str) -> tuple[CockpitAnalysisResult, str]:
+    try:
+        return analyze_cockpit_market(symbol, timeframe), "cockpit_service"
+    except Exception:
+        legacy_result = analyze_market(symbol, timeframe)
+        from services.cockpit_service import build_cockpit_result
+
+        return build_cockpit_result(legacy_result), "cockpit_fallback"
+
+
 def _render_source_banner(source: str) -> None:
     if source == "http_api":
         st.caption("Analysis source: backend API")
         return
     if source == "local_fallback":
         st.warning("API tidak tersedia, analysis menggunakan local fallback.")
+        return
+    if source == "cockpit_service":
+        st.caption("Analysis source: cockpit service")
+        return
+    if source == "cockpit_fallback":
+        st.warning("Cockpit service tidak tersedia penuh, UI memakai fallback schema dari legacy analysis.")
         return
     st.caption("Analysis source: local service")
 

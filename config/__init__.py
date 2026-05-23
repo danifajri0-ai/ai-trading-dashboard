@@ -5,6 +5,7 @@ from .settings import (
     RiskSettings,
     TradingDashboardSettings,
 )
+from .feature_flags import FEATURE_FLAGS, FeatureTier, normalize_tier
 
 __all__ = [
     "SETTINGS",
@@ -12,4 +13,7 @@ __all__ = [
     "IndicatorSettings",
     "RiskSettings",
     "TradingDashboardSettings",
+    "FEATURE_FLAGS",
+    "FeatureTier",
+    "normalize_tier",
 ]
