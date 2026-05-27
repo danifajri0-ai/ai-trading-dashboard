@@ -3,6 +3,10 @@ export const metadata = {
 };
 
 export default function SettingsPage() {
+  const apiConfigured = Boolean(process.env.NEXT_PUBLIC_API_BASE_URL);
+  const supabaseUrlConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
+  const supabaseKeyConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
+
   return (
     <main className="grid" style={{ gap: 14 }}>
       <section className="card">
@@ -14,16 +18,16 @@ export default function SettingsPage() {
       <section className="card">
         <h3>Environment</h3>
         <div className="kv">
-          <span>API Base URL</span>
-          <strong>{process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000 (default fallback)"}</strong>
+          <span>API Base URL Status</span>
+          <strong>{apiConfigured ? "configured" : "not set (strict backend mode blocks live analysis)"}</strong>
         </div>
         <div className="kv">
-          <span>Supabase URL</span>
-          <strong>{process.env.NEXT_PUBLIC_SUPABASE_URL || "not set"}</strong>
+          <span>Supabase URL Status</span>
+          <strong>{supabaseUrlConfigured ? "configured" : "not set"}</strong>
         </div>
         <div className="kv">
           <span>Supabase Publishable Key</span>
-          <strong>{process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY ? "configured" : "not set"}</strong>
+          <strong>{supabaseKeyConfigured ? "configured" : "not set"}</strong>
         </div>
       </section>
     </main>

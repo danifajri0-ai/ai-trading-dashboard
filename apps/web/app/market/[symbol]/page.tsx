@@ -1,50 +1,71 @@
-import { ConfidenceMeter } from "@/components/ConfidenceMeter";
-import { IndicatorPanel } from "@/components/IndicatorPanel";
-import { MarketHeader } from "@/components/MarketHeader";
-import { RiskPlanCard } from "@/components/RiskPlanCard";
-import { SignalCard } from "@/components/SignalCard";
-import { getAnalysis } from "@/lib/api";
+import { CockpitConsole, PairTimeframeSelector } from "@/components/CockpitConsole";
+import { getCockpitAnalysis, getSymbols } from "@/lib/api";
 
 type MarketPageProps = {
   params: {
     symbol: string;
   };
+  searchParams?: {
+    timeframe?: string;
+  };
 };
 
-export default async function MarketSymbolPage({ params }: MarketPageProps) {
-  const symbol = params.symbol?.toUpperCase() || "BTCUSD";
-  const analysis = await getAnalysis(symbol, "H1");
+export default async function MarketSymbolPage({ params, searchParams }: MarketPageProps) {
+  let symbolsPayload = null;
+  let symbolsError = "";
+  try {
+    symbolsPayload = await getSymbols();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "API response unavailable.";
+    symbolsError = `Symbol catalog unavailable from backend. ${message}`;
+  }
+  const selectedSymbol = normalizeChoice(params.symbol, symbolsPayload?.symbols ?? [], "BTCUSD");
+  const selectedTimeframe = normalizeChoice(searchParams?.timeframe, symbolsPayload?.timeframes ?? [], "H1");
+  const apiStatus = process.env.NEXT_PUBLIC_API_BASE_URL ? "configured" : "unconfigured";
+  let result = null;
+  let loadError = "";
+  if (symbolsPayload) {
+    try {
+      result = await getCockpitAnalysis(selectedSymbol, selectedTimeframe);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "API response unavailable.";
+      loadError = `Cockpit data unavailable for ${selectedSymbol} ${selectedTimeframe}. ${message}`;
+    }
+  }
 
   return (
-    <main className="grid" style={{ gap: 14 }}>
-      <MarketHeader symbol={analysis.symbol} timeframe={analysis.timeframe} source={process.env.NEXT_PUBLIC_API_BASE_URL || "fallback"} />
-      <SignalCard
-        signal={analysis.signal}
-        bias={analysis.bias}
-        confidence={analysis.confidence}
-        riskLevel={analysis.risk_level}
-      />
-      <div className="grid grid-2">
-        <IndicatorPanel
-          trend={analysis.technical_summary?.trend}
-          emaFast={analysis.technical_summary?.ema_fast}
-          emaSlow={analysis.technical_summary?.ema_slow}
-          rsi={analysis.technical_summary?.rsi}
-          atr={analysis.technical_summary?.atr}
-          support={analysis.technical_summary?.support}
-          resistance={analysis.technical_summary?.resistance}
+    <>
+      {symbolsPayload ? (
+        <PairTimeframeSelector
+          symbolsPayload={symbolsPayload}
+          selectedSymbol={selectedSymbol}
+          selectedTimeframe={selectedTimeframe}
         />
-        <RiskPlanCard
-          riskLevel={analysis.risk_summary?.risk_level}
-          entryArea={analysis.risk_summary?.entry_area}
-          stopLoss={analysis.risk_summary?.stop_loss}
-          takeProfit={analysis.risk_summary?.take_profit}
-          riskReward={analysis.risk_summary?.risk_reward}
-          maxRiskPct={analysis.risk_summary?.max_risk_pct}
-          notes={analysis.risk_summary?.notes}
-        />
-      </div>
-      <ConfidenceMeter confidence={analysis.confidence} qualityScore={analysis.trade_quality_score} />
-    </main>
+      ) : (
+        <section className="card">
+          <h2>Symbol Catalog Unavailable</h2>
+          <p className="section-subtitle">
+            Frontend strict mode aktif. Pair/timeframe selector hanya boleh dari backend API.
+          </p>
+          <p className="section-subtitle">{symbolsError || "Please verify API deployment and CORS settings."}</p>
+        </section>
+      )}
+      {symbolsPayload && result ? (
+        <CockpitConsole result={result} apiStatus={apiStatus} />
+      ) : symbolsPayload ? (
+        <section className="card">
+          <h2>Live Cockpit Unavailable</h2>
+          <p className="section-subtitle">
+            Data analisa live tidak bisa dimuat. Frontend tidak memakai mock agar parity data Streamlit ke Next.js tetap akurat.
+          </p>
+          <p className="section-subtitle">{loadError || "Please verify API deployment and CORS settings."}</p>
+        </section>
+      ) : null}
+    </>
   );
+}
+
+function normalizeChoice(value: string | undefined, allowed: string[], fallback: string): string {
+  const normalized = String(value || fallback).trim().toUpperCase();
+  return allowed.includes(normalized) ? normalized : fallback;
 }

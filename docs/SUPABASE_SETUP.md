@@ -30,6 +30,7 @@ Catatan:
 2. Buka SQL Editor.
 3. Jalankan script schema dari:
    - `supabase/migrations/0001_optional_persistence.sql`
+   - `supabase/migrations/0002_multi_user_foundation.sql`
 4. Ambil nilai:
    - Project URL -> `SUPABASE_URL`
    - Service role key -> `SUPABASE_SERVICE_ROLE_KEY`
@@ -41,13 +42,20 @@ Catatan:
 Tabel minimal:
 - `analysis_logs`
 - `watchlists`
+- `user_profiles`
+- `tier_limits`
+- `user_usage_events`
 
 SQL tersedia di:
 - `supabase/migrations/0001_optional_persistence.sql`
+- `supabase/migrations/0002_multi_user_foundation.sql`
 
 Kolom utama:
-- `analysis_logs`: `symbol`, `timeframe`, `signal`, `bias`, `confidence`, `summary`, `raw_payload`, `created_at`
-- `watchlists`: `symbol`, `market_type`, `notes`, `created_at`
+- `analysis_logs`: `user_id`, `symbol`, `timeframe`, `signal`, `bias`, `confidence`, `summary`, `raw_payload`, `created_at`
+- `watchlists`: `user_id`, `symbol`, `market_type`, `notes`, `created_at`
+- `user_profiles`: `id`, `email`, `display_name`, `tier` (`free|plus|pro`), `is_active`, `created_at`, `updated_at`
+- `tier_limits`: batas fitur per tier (`free`, `plus`, `pro`)
+- `user_usage_events`: log event penggunaan per user untuk fondasi quota/billing
 
 ## 5) Cara Test Koneksi Lokal
 
@@ -69,6 +77,10 @@ venv\Scripts\python.exe -m uvicorn apps.api.main:app --host 127.0.0.1 --port 800
 - `POST /api/watchlist`
 - `GET /api/watchlist`
 - `DELETE /api/watchlist/{id}`
+- `POST /api/users/profile`
+- `GET /api/users/profile/{user_id}`
+- `GET /api/users/tier-limits`
+- `POST /api/users/usage-events`
 
 Jika konfigurasi valid, data akan tersimpan ke Supabase.
 
@@ -84,4 +96,3 @@ Perilaku saat disabled:
 - Endpoint health tetap normal.
 - Endpoint persistence memberi respons jelas bahwa Supabase disabled/unavailable.
 - Endpoint analisis utama tetap berjalan.
-

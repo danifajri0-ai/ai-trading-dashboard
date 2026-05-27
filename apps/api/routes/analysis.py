@@ -43,6 +43,7 @@ def analyze(body: AnalyzeRequestBody) -> dict:
 def _safe_save_analysis_history(payload: dict) -> None:
     try:
         _PERSISTENCE_SERVICE.save_analysis_log(
+            user_id=None,
             symbol=str(payload.get("symbol", "")),
             timeframe=str(payload.get("timeframe", "")),
             signal=str(payload.get("signal", "")),

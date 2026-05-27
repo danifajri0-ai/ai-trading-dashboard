@@ -45,6 +45,24 @@ class SupabaseClient:
             return rows
         raise SupabaseRequestError(f"Unexpected insert response shape for table '{table}'.")
 
+    def upsert_row(self, table: str, payload: dict[str, Any], *, on_conflict: str) -> dict[str, Any]:
+        rows = self._request_json(
+            method="POST",
+            table=table,
+            payload=payload,
+            query={"select": "*", "on_conflict": on_conflict},
+            extra_headers={
+                "Prefer": "resolution=merge-duplicates,return=representation",
+            },
+        )
+        if isinstance(rows, list) and rows:
+            first = rows[0]
+            if isinstance(first, dict):
+                return first
+        if isinstance(rows, dict):
+            return rows
+        raise SupabaseRequestError(f"Unexpected upsert response shape for table '{table}'.")
+
     def fetch_rows(self, table: str, query: dict[str, str] | None = None) -> list[dict[str, Any]]:
         payload = self._request_json(method="GET", table=table, query=query)
         if isinstance(payload, list):
@@ -61,6 +79,18 @@ class SupabaseClient:
         if isinstance(payload, list):
             return [item for item in payload if isinstance(item, dict)]
         raise SupabaseRequestError(f"Unexpected delete response shape for table '{table}'.")
+
+    def update_rows(self, table: str, query: dict[str, str], payload: dict[str, Any]) -> list[dict[str, Any]]:
+        rows = self._request_json(
+            method="PATCH",
+            table=table,
+            query={**query, "select": "*"},
+            payload=payload,
+            extra_headers={"Prefer": "return=representation"},
+        )
+        if isinstance(rows, list):
+            return [item for item in rows if isinstance(item, dict)]
+        raise SupabaseRequestError(f"Unexpected update response shape for table '{table}'.")
 
     def _request_json(
         self,
@@ -147,4 +177,3 @@ def _safe_read_error_body(exc: HTTPError) -> str:
     except Exception:
         return exc.reason
     return payload or str(exc.reason)
-
