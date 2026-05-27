@@ -50,26 +50,301 @@ async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
   }
 }
 
+type LegacyAnalysisPayload = {
+  ticker: string;
+  current_price: number;
+  indicators?: {
+    rsi?: number;
+    macd?: number;
+    macd_signal?: number;
+    macd_hist?: number;
+    sma_20?: number;
+    ema_20?: number;
+  };
+  ai_recommendation?: {
+    action?: string;
+    reasoning?: string;
+  };
+  historical_data?: Array<{
+    date?: number;
+    open?: number;
+    high?: number;
+    low?: number;
+    close?: number;
+    sma?: number;
+    ema?: number;
+  }>;
+};
+
+function toLegacyTicker(symbol: string): string {
+  const clean = symbol.trim().toUpperCase();
+  if (clean.includes("-") || clean.includes("=")) {
+    return clean;
+  }
+  if (clean.endsWith("USD") && clean.length > 3) {
+    return `${clean.slice(0, -3)}-USD`;
+  }
+  return clean;
+}
+
+function inferBiasAndConfidence(payload: LegacyAnalysisPayload): { bias: string; confidence: number } {
+  const close = payload.current_price;
+  const sma = payload.indicators?.sma_20;
+  const rsi = payload.indicators?.rsi;
+  const action = (payload.ai_recommendation?.action || "").toUpperCase();
+
+  let bias = "NEUTRAL";
+  if (typeof sma === "number") {
+    bias = close >= sma ? "BULLISH" : "BEARISH";
+  } else if (action === "BUY") {
+    bias = "BULLISH";
+  } else if (action === "SELL") {
+    bias = "BEARISH";
+  }
+
+  let confidence = 62;
+  if (typeof rsi === "number") {
+    const rsiDistance = Math.min(Math.abs(rsi - 50), 35);
+    confidence = Math.round(60 + rsiDistance);
+  }
+  confidence = Math.max(50, Math.min(95, confidence));
+  return { bias, confidence };
+}
+
+function mapLegacyToCockpit(payload: LegacyAnalysisPayload, timeframe: string): CockpitAnalysisResult {
+  const { bias, confidence } = inferBiasAndConfidence(payload);
+  const action = (payload.ai_recommendation?.action || "HOLD").toUpperCase();
+  const rsi = payload.indicators?.rsi ?? null;
+  const reasoning = payload.ai_recommendation?.reasoning || "Legacy backend recommendation.";
+  const latestBar = payload.historical_data?.[payload.historical_data.length - 1];
+  const entry = latestBar?.close ?? payload.current_price;
+  const stop = typeof latestBar?.low === "number" ? latestBar.low : payload.current_price * 0.985;
+  const target = typeof latestBar?.high === "number" ? latestBar.high : payload.current_price * 1.015;
+  const rr = Math.max(1, Math.round((Math.abs(target - entry) / Math.max(Math.abs(entry - stop), 0.0001)) * 100) / 100);
+
+  return {
+    schema_version: "cockpit.v1-legacy-adapter",
+    symbol: payload.ticker,
+    timeframe,
+    price_snapshot: {
+      status: "available",
+      symbol: payload.ticker,
+      timeframe,
+      last_price: payload.current_price,
+      bid: null,
+      ask: null,
+      price_source: "legacy_backend",
+      updated_at: new Date().toISOString(),
+      notes: ["Mapped from legacy /api/analysis endpoint"]
+    },
+    market_overview: {
+      status: "available",
+      bias,
+      signal: action,
+      risk_level: "medium",
+      confidence,
+      trade_quality_score: confidence,
+      summary: reasoning,
+      warnings: []
+    },
+    market_context: {
+      status: "available",
+      context: {
+        rsi,
+        macd: payload.indicators?.macd ?? null,
+        sma_20: payload.indicators?.sma_20 ?? null,
+        ema_20: payload.indicators?.ema_20 ?? null
+      },
+      notes: ["Legacy context fields adapted for cockpit rendering"]
+    },
+    signal_decision: {
+      status: "available",
+      action,
+      confidence,
+      bias,
+      validation_score: confidence,
+      valid_signal: action !== "HOLD",
+      blocked_reason: null,
+      warning_reason: null,
+      confirmation_reason: reasoning,
+      reasons: [reasoning],
+      notes: []
+    },
+    confidence_breakdown: {
+      status: "available",
+      overall_score: confidence,
+      components: {
+        rsi_component: { score: rsi ?? 50, weight: 0.5, weighted_score: (rsi ?? 50) * 0.5 },
+        trend_component: { score: confidence, weight: 0.5, weighted_score: confidence * 0.5 }
+      },
+      notes: ["Confidence synthesized from legacy indicator payload"]
+    },
+    evidence_layer: {
+      status: "available",
+      reasons: [reasoning],
+      warnings: [],
+      technical_notes: [`RSI: ${rsi ?? "n/a"}`, `MACD: ${payload.indicators?.macd ?? "n/a"}`],
+      sentiment_notes: [],
+      technical_evidence: [{ label: "Legacy indicators", status: "available", detail: "RSI/MACD/SMA/EMA available", score: confidence }],
+      risk_evidence: [{ label: "Risk snapshot", status: "caution", detail: "Derived risk plan from latest bar", score: 60 }],
+      data_quality_evidence: [{ label: "Adapter mode", status: "caution", detail: "Using compatibility mapping from legacy backend", score: 70 }],
+      contradictions: []
+    },
+    multi_timeframe: {
+      status: "partial",
+      primary_timeframe: timeframe,
+      alignment_score: confidence,
+      dominant_bias: bias,
+      per_timeframe_bias: { [timeframe]: bias },
+      conflict_notes: [],
+      entry_timing: action === "BUY" ? "momentum_follow" : action === "SELL" ? "reversal_watch" : "wait",
+      timeframes: { [timeframe]: { bias, signal: action } },
+      notes: ["Legacy backend does not expose native multi-timeframe grid"]
+    },
+    regime_analysis: {
+      status: "partial",
+      regime: bias === "BULLISH" ? "trend_up" : bias === "BEARISH" ? "trend_down" : "sideways",
+      regime_score: confidence,
+      volatility_state: "normal",
+      liquidity_condition: "unknown",
+      preferred_strategy: action === "HOLD" ? "wait" : "trend_follow",
+      risk_adjustment: "standard",
+      notes: ["Regime inferred from adapted fields"]
+    },
+    market_structure: {
+      status: "partial",
+      structure: bias,
+      support: typeof latestBar?.low === "number" ? latestBar.low : null,
+      resistance: typeof latestBar?.high === "number" ? latestBar.high : null,
+      support_distance_pct: null,
+      resistance_distance_pct: null,
+      breakout_note: null,
+      rejection_note: null,
+      notes: ["Support/resistance approximated from latest historical candle"]
+    },
+    risk_plan: {
+      status: "available",
+      risk_level: "medium",
+      entry_area: entry,
+      stop_loss: stop,
+      take_profit: target,
+      risk_reward: rr,
+      max_risk_pct: 2,
+      notes: ["Risk plan adapted from legacy candle snapshot"]
+    },
+    risk_gate: {
+      status: action === "HOLD" ? "caution" : "available",
+      risk_status: action === "HOLD" ? "wait" : "valid",
+      reasons: [reasoning],
+      raw: {}
+    },
+    data_quality: {
+      status: "caution",
+      score: 70,
+      freshness_status: "unknown",
+      issues: ["Legacy backend contract mapped through compatibility adapter"],
+      raw: {}
+    },
+    sentiment_context: {
+      status: "not_available",
+      sentiment_label: null,
+      sentiment_score: null,
+      context: [],
+      source: null,
+      notes: ["Legacy backend has no sentiment context endpoint"]
+    },
+    backtest_snapshot: {
+      status: "not_available",
+      metrics: {},
+      notes: ["Backtest not provided by legacy backend contract"]
+    },
+    validation_notes: {
+      status: "caution",
+      notes: ["Cockpit rendered using legacy compatibility adapter"]
+    },
+    ui_sections: {
+      status: "available",
+      order: [],
+      visible: {}
+    },
+    feature_flags: {
+      compatibility_mode: true,
+      source: "legacy_backend"
+    },
+    legacy_result: {
+      symbol: payload.ticker,
+      timeframe,
+      bias,
+      signal: action,
+      confidence,
+      risk_level: "medium",
+      trade_quality_score: confidence,
+      reasons: [reasoning],
+      warnings: [],
+      technical_summary: {
+        trend: bias,
+        rsi: rsi ?? undefined,
+        notes: ["Adapted from /api/analysis indicators"]
+      }
+    }
+  };
+}
+
 export async function getAnalysis(symbol = "BTCUSD", timeframe = "H1"): Promise<AnalysisResult> {
-  return fetchJson<AnalysisResult>("/analyze", {
-    method: "POST",
-    body: JSON.stringify({ symbol, timeframe })
-  });
+  try {
+    return await fetchJson<AnalysisResult>("/analyze", {
+      method: "POST",
+      body: JSON.stringify({ symbol, timeframe })
+    });
+  } catch {
+    const legacy = await fetchJson<LegacyAnalysisPayload>(`/api/analysis/${encodeURIComponent(toLegacyTicker(symbol))}`);
+    const mapped = mapLegacyToCockpit(legacy, timeframe);
+    return mapped.legacy_result as AnalysisResult;
+  }
 }
 
 export async function getCockpitAnalysis(symbol = "BTCUSD", timeframe = "H1"): Promise<CockpitAnalysisResult> {
-  return fetchJson<CockpitAnalysisResult>("/cockpit/analyze", {
-    method: "POST",
-    body: JSON.stringify({ symbol, timeframe })
-  });
+  try {
+    return await fetchJson<CockpitAnalysisResult>("/cockpit/analyze", {
+      method: "POST",
+      body: JSON.stringify({ symbol, timeframe })
+    });
+  } catch {
+    const legacy = await fetchJson<LegacyAnalysisPayload>(`/api/analysis/${encodeURIComponent(toLegacyTicker(symbol))}`);
+    return mapLegacyToCockpit(legacy, timeframe);
+  }
 }
 
 export async function getSymbols(): Promise<SymbolsPayload> {
-  const payload = await fetchJson<SymbolsPayload>("/symbols");
-  if (!Array.isArray(payload.symbols) || !Array.isArray(payload.timeframes)) {
-    throw new ApiUnavailableError("/symbols", "API symbols payload is invalid.");
+  try {
+    const payload = await fetchJson<SymbolsPayload>("/symbols");
+    if (!Array.isArray(payload.symbols) || !Array.isArray(payload.timeframes)) {
+      throw new ApiUnavailableError("/symbols", "API symbols payload is invalid.");
+    }
+    return payload;
+  } catch {
+    const queries = ["BTC", "ETH", "AAPL", "TSLA", "EUR", "XAU"];
+    const symbols = new Set<string>();
+    for (const q of queries) {
+      try {
+        const items = await fetchJson<Array<{ symbol?: string }>>(`/api/portfolio/search?q=${encodeURIComponent(q)}`);
+        for (const item of items) {
+          if (item?.symbol) {
+            symbols.add(String(item.symbol).toUpperCase());
+          }
+        }
+      } catch {
+        // continue probing other queries
+      }
+    }
+    if (!symbols.size) {
+      throw new ApiUnavailableError("/api/portfolio/search", "Legacy backend symbol discovery failed.");
+    }
+    return {
+      symbols: Array.from(symbols).sort((a, b) => a.localeCompare(b)),
+      timeframes: ["H1"]
+    };
   }
-  return payload;
 }
 
 export async function getHistory(limit = 50): Promise<AnalysisHistoryItem[]> {
