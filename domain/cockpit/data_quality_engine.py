@@ -24,6 +24,12 @@ def evaluate_data_quality(
     issues: list[str] = []
     warnings: list[str] = []
     score = 100.0
+    source = str(getattr(frame, "attrs", {}).get("source") or "unknown")
+    provider_symbol = getattr(frame, "attrs", {}).get("provider_symbol")
+
+    if source == "dummy":
+        issues.append("Synthetic fallback data is active because live market data was unavailable.")
+        score -= 40.0
 
     if len(frame) < min_candles:
         issues.append(f"Insufficient candles: {len(frame)} available, {min_candles} required.")
@@ -66,6 +72,8 @@ def evaluate_data_quality(
         "insufficient_candles": len(frame) < min_candles,
         "duplicate_timestamp_detected": duplicate_timestamps,
         "candle_count": int(len(frame)),
+        "source": source,
+        "provider_symbol": provider_symbol,
         "issues": issues,
         "warnings": warnings,
     }
@@ -82,6 +90,8 @@ def _not_available(reason: str) -> dict[str, Any]:
         "insufficient_candles": True,
         "duplicate_timestamp_detected": False,
         "candle_count": 0,
+        "source": "not_available",
+        "provider_symbol": None,
         "issues": [reason],
         "warnings": [],
     }
@@ -95,12 +105,14 @@ def _normalize_frame(candles: object) -> pd.DataFrame | None:
         return None
 
     frame = candles.copy()
+    frame.attrs.update(getattr(candles, "attrs", {}))
     if "Volume" not in frame.columns:
         frame["Volume"] = pd.NA
     frame["Timestamp"] = pd.to_datetime(frame["Timestamp"], errors="coerce", utc=True)
     for column in ("Open", "High", "Low", "Close", "Volume"):
         frame[column] = pd.to_numeric(frame[column], errors="coerce")
     frame = frame.dropna(subset=["Timestamp"]).sort_values("Timestamp").reset_index(drop=True)
+    frame.attrs.update(getattr(candles, "attrs", {}))
     return frame
 
 
