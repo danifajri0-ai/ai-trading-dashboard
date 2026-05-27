@@ -120,7 +120,7 @@ function mapLegacyToCockpit(payload: LegacyAnalysisPayload, timeframe: string): 
   const entry = latestBar?.close ?? payload.current_price;
   const stop = typeof latestBar?.low === "number" ? latestBar.low : payload.current_price * 0.985;
   const target = typeof latestBar?.high === "number" ? latestBar.high : payload.current_price * 1.015;
-  const rr = Math.max(1, Math.round((Math.abs(target - entry) / Math.max(Math.abs(entry - stop), 0.0001)) * 100) / 100);
+  const rr = Math.round((Math.abs(target - entry) / Math.max(Math.abs(entry - stop), 0.0001)) * 100) / 100;
 
   return {
     schema_version: "cockpit.v1-legacy-adapter",
@@ -229,7 +229,7 @@ function mapLegacyToCockpit(payload: LegacyAnalysisPayload, timeframe: string): 
       stop_loss: stop,
       take_profit: target,
       risk_reward: rr,
-      max_risk_pct: 2,
+      max_risk_pct: 0.02,
       notes: ["Risk plan adapted from legacy candle snapshot"]
     },
     risk_gate: {
