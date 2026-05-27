@@ -16,23 +16,38 @@
 
 @keyframes driftGlow {
   0% {
-    transform: translate3d(-6%, -4%, 0) scale(1);
-    opacity: 0.55;
+    transform: translate3d(-8%, 0, 0) skewX(-8deg);
+    opacity: 0.32;
   }
   50% {
-    transform: translate3d(6%, 5%, 0) scale(1.05);
-    opacity: 0.85;
+    transform: translate3d(8%, 0, 0) skewX(-8deg);
+    opacity: 0.58;
   }
   100% {
-    transform: translate3d(-6%, -4%, 0) scale(1);
-    opacity: 0.55;
+    transform: translate3d(-8%, 0, 0) skewX(-8deg);
+    opacity: 0.32;
   }
 }
 
 @keyframes gridPulse {
-  0% { opacity: 0.12; }
-  50% { opacity: 0.2; }
-  100% { opacity: 0.12; }
+  0% {
+    background-position: 0 0, 0 0, 0 0;
+    opacity: 0.14;
+  }
+  50% {
+    opacity: 0.24;
+  }
+  100% {
+    background-position: 40px 40px, 40px 40px, 220px 0;
+    opacity: 0.14;
+  }
+}
+
+@keyframes scanline {
+  0% { transform: translateY(-12vh); opacity: 0; }
+  18% { opacity: 0.35; }
+  50% { opacity: 0.18; }
+  100% { transform: translateY(112vh); opacity: 0; }
 }
 
 * {
@@ -48,7 +63,10 @@ body {
   overflow-x: hidden;
   margin: 0;
   font-family: Inter, Segoe UI, Arial, sans-serif;
-  background: linear-gradient(180deg, #07111f 0%, #0a101a 54%, #071016 100%);
+  background:
+    linear-gradient(180deg, #061118 0%, #0b1317 46%, #060a10 100%),
+    linear-gradient(115deg, rgba(56, 189, 248, 0.1), transparent 36%, rgba(52, 211, 153, 0.08) 70%, transparent);
+  background-attachment: fixed;
   color: var(--text);
 }
 
@@ -61,23 +79,23 @@ body::after {
 }
 
 body::before {
-  z-index: -2;
+  z-index: 0;
   background:
-    radial-gradient(circle at 18% 24%, rgba(34, 211, 238, 0.2), transparent 44%),
-    radial-gradient(circle at 82% 14%, rgba(56, 189, 248, 0.16), transparent 42%),
-    radial-gradient(circle at 70% 80%, rgba(16, 185, 129, 0.15), transparent 42%);
-  filter: blur(18px);
+    linear-gradient(105deg, transparent 0 26%, rgba(34, 211, 238, 0.1) 38%, transparent 52%),
+    conic-gradient(from 220deg at 50% 50%, rgba(251, 191, 36, 0.08), transparent 18%, rgba(34, 197, 94, 0.08), transparent 48%, rgba(56, 189, 248, 0.1), transparent 72%);
+  filter: blur(4px);
   animation: driftGlow 14s ease-in-out infinite;
 }
 
 body::after {
-  z-index: -1;
+  z-index: 0;
   background-image:
     linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
-  background-size: 40px 40px;
+    linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, transparent, rgba(56, 189, 248, 0.18), transparent);
+  background-size: 40px 40px, 40px 40px, 220px 100%;
   opacity: 0.14;
-  animation: gridPulse 8s ease-in-out infinite;
+  animation: gridPulse 12s linear infinite;
 }
 
 a {
@@ -91,8 +109,23 @@ select {
 }
 
 .shell {
+  position: relative;
+  z-index: 1;
   min-height: 100vh;
   padding: 18px;
+}
+
+.shell::before {
+  content: "";
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 120px;
+  pointer-events: none;
+  background: linear-gradient(180deg, transparent, rgba(56, 189, 248, 0.1), transparent);
+  mix-blend-mode: screen;
+  animation: scanline 8s ease-in-out infinite;
 }
 
 .container {
@@ -134,6 +167,15 @@ select {
   background: rgba(15, 23, 42, 0.72);
   color: #cbd5e1;
   font-size: 13px;
+  transition: background 180ms ease, border-color 180ms ease, color 180ms ease, transform 150ms ease, box-shadow 220ms ease;
+}
+
+.nav a:hover {
+  transform: translateY(-1px);
+  border-color: rgba(52, 211, 153, 0.58);
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.4), rgba(8, 47, 73, 0.58));
+  color: #f8fafc;
+  box-shadow: 0 12px 26px rgba(20, 184, 166, 0.16);
 }
 
 .cockpit-page {
@@ -182,6 +224,14 @@ select {
   background: rgba(2, 6, 23, 0.62);
   color: #f8fafc;
   padding: 8px 10px;
+  transition: border-color 180ms ease, box-shadow 220ms ease, background 180ms ease, transform 150ms ease;
+}
+
+.selector-panel select:hover,
+.selector-panel select:focus {
+  outline: none;
+  border-color: rgba(52, 211, 153, 0.52);
+  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.12);
 }
 
 .selector-panel button {
@@ -364,6 +414,15 @@ select {
   color: #cbd5e1;
   font-size: 12px;
   font-weight: 800;
+  transition: border-color 180ms ease, background 180ms ease, color 180ms ease, transform 150ms ease;
+}
+
+.cockpit-badge:hover,
+.tab-strip span:hover {
+  transform: translateY(-1px);
+  border-color: rgba(251, 191, 36, 0.5);
+  background: rgba(120, 53, 15, 0.24);
+  color: #fde68a;
 }
 
 .tone-good {
@@ -862,6 +921,7 @@ select {
   font-size: 12px;
   font-weight: 800;
   padding: 7px 11px;
+  transition: border-color 180ms ease, background 180ms ease, color 180ms ease, transform 150ms ease;
 }
 
 .analysis-panel {
