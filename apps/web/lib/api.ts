@@ -118,8 +118,18 @@ function mapLegacyToCockpit(payload: LegacyAnalysisPayload, timeframe: string): 
   const reasoning = payload.ai_recommendation?.reasoning || "Legacy backend recommendation.";
   const latestBar = payload.historical_data?.[payload.historical_data.length - 1];
   const entry = latestBar?.close ?? payload.current_price;
-  const stop = typeof latestBar?.low === "number" ? latestBar.low : payload.current_price * 0.985;
-  const target = typeof latestBar?.high === "number" ? latestBar.high : payload.current_price * 1.015;
+  const minMove = Math.max(Math.abs(entry) * 0.0025, 0.0001);
+  let stop = typeof latestBar?.low === "number" ? latestBar.low : entry - minMove;
+  let target = typeof latestBar?.high === "number" ? latestBar.high : entry + minMove * 1.5;
+  if (action === "SELL") {
+    stop = typeof latestBar?.high === "number" ? latestBar.high : entry + minMove;
+    target = typeof latestBar?.low === "number" ? latestBar.low : entry - minMove * 1.5;
+    if (stop <= entry) stop = entry + minMove;
+    if (target >= entry) target = entry - minMove * 1.5;
+  } else {
+    if (stop >= entry) stop = entry - minMove;
+    if (target <= entry) target = entry + minMove * 1.5;
+  }
   const rr = Math.round((Math.abs(target - entry) / Math.max(Math.abs(entry - stop), 0.0001)) * 100) / 100;
 
   return {
