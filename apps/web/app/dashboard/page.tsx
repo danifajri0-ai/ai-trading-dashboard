@@ -1,3 +1,5 @@
+import { headers } from "next/headers";
+
 import { CockpitConsole, PairTimeframeSelector } from "@/components/CockpitConsole";
 import { getApiConfigState, getCockpitAnalysis, getSymbols } from "@/lib/api";
 
@@ -9,10 +11,14 @@ type DashboardPageProps = {
 };
 
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
+  const requestHeaders = headers();
+  const requestHost = requestHeaders.get("x-forwarded-host") || requestHeaders.get("host");
+  const requestProto = requestHeaders.get("x-forwarded-proto") || "https";
+  const requestBaseUrl = requestHost ? `${requestProto}://${requestHost}/backend` : undefined;
   let symbolsPayload = null;
   let symbolsError = "";
   try {
-    symbolsPayload = await getSymbols();
+    symbolsPayload = await getSymbols(requestBaseUrl);
   } catch (error) {
     const message = error instanceof Error ? error.message : "API response unavailable.";
     symbolsError = `Symbol catalog unavailable from backend. ${message}`;
@@ -25,7 +31,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
   let loadError = "";
   if (symbolsPayload) {
     try {
-      result = await getCockpitAnalysis(selectedSymbol, selectedTimeframe);
+      result = await getCockpitAnalysis(selectedSymbol, selectedTimeframe, requestBaseUrl);
     } catch (error) {
       const message = error instanceof Error ? error.message : "API response unavailable.";
       loadError = `Cockpit data unavailable for ${selectedSymbol} ${selectedTimeframe}. ${message}`;

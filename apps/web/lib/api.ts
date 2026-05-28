@@ -57,8 +57,15 @@ export function getApiBaseUrl(): string {
   return DEFAULT_API_BASE_URL;
 }
 
-async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const url = `${getApiBaseUrl()}${path}`;
+function resolveApiBaseUrl(overrideBaseUrl?: string): string {
+  if (overrideBaseUrl && /^https?:\/\//i.test(overrideBaseUrl)) {
+    return normalizeBaseUrl(overrideBaseUrl);
+  }
+  return getApiBaseUrl();
+}
+
+async function fetchJson<T>(path: string, init?: RequestInit, overrideBaseUrl?: string): Promise<T> {
+  const url = `${resolveApiBaseUrl(overrideBaseUrl)}${path}`;
   try {
     const response = await fetch(url, {
       ...init,
@@ -330,34 +337,50 @@ function mapLegacyToCockpit(payload: LegacyAnalysisPayload, timeframe: string): 
   };
 }
 
-export async function getAnalysis(symbol = "BTCUSD", timeframe = "H1"): Promise<AnalysisResult> {
+export async function getAnalysis(
+  symbol = "BTCUSD",
+  timeframe = "H1",
+  overrideBaseUrl?: string
+): Promise<AnalysisResult> {
   try {
     return await fetchJson<AnalysisResult>("/analyze", {
       method: "POST",
       body: JSON.stringify({ symbol, timeframe })
-    });
+    }, overrideBaseUrl);
   } catch {
-    const legacy = await fetchJson<LegacyAnalysisPayload>(`/api/analysis/${encodeURIComponent(toLegacyTicker(symbol))}`);
+    const legacy = await fetchJson<LegacyAnalysisPayload>(
+      `/api/analysis/${encodeURIComponent(toLegacyTicker(symbol))}`,
+      undefined,
+      overrideBaseUrl
+    );
     const mapped = mapLegacyToCockpit(legacy, timeframe);
     return mapped.legacy_result as AnalysisResult;
   }
 }
 
-export async function getCockpitAnalysis(symbol = "BTCUSD", timeframe = "H1"): Promise<CockpitAnalysisResult> {
+export async function getCockpitAnalysis(
+  symbol = "BTCUSD",
+  timeframe = "H1",
+  overrideBaseUrl?: string
+): Promise<CockpitAnalysisResult> {
   try {
     return await fetchJson<CockpitAnalysisResult>("/cockpit/analyze", {
       method: "POST",
       body: JSON.stringify({ symbol, timeframe })
-    });
+    }, overrideBaseUrl);
   } catch {
-    const legacy = await fetchJson<LegacyAnalysisPayload>(`/api/analysis/${encodeURIComponent(toLegacyTicker(symbol))}`);
+    const legacy = await fetchJson<LegacyAnalysisPayload>(
+      `/api/analysis/${encodeURIComponent(toLegacyTicker(symbol))}`,
+      undefined,
+      overrideBaseUrl
+    );
     return mapLegacyToCockpit(legacy, timeframe);
   }
 }
 
-export async function getSymbols(): Promise<SymbolsPayload> {
+export async function getSymbols(overrideBaseUrl?: string): Promise<SymbolsPayload> {
   try {
-    const payload = await fetchJson<SymbolsPayload>("/symbols");
+    const payload = await fetchJson<SymbolsPayload>("/symbols", undefined, overrideBaseUrl);
     if (!Array.isArray(payload.symbols) || !Array.isArray(payload.timeframes)) {
       throw new ApiUnavailableError("/symbols", "API symbols payload is invalid.");
     }
@@ -367,7 +390,11 @@ export async function getSymbols(): Promise<SymbolsPayload> {
     const symbols = new Set<string>();
     for (const q of queries) {
       try {
-        const items = await fetchJson<Array<{ symbol?: string }>>(`/api/portfolio/search?q=${encodeURIComponent(q)}`);
+        const items = await fetchJson<Array<{ symbol?: string }>>(
+          `/api/portfolio/search?q=${encodeURIComponent(q)}`,
+          undefined,
+          overrideBaseUrl
+        );
         for (const item of items) {
           if (item?.symbol) {
             symbols.add(String(item.symbol).toUpperCase());
@@ -387,18 +414,26 @@ export async function getSymbols(): Promise<SymbolsPayload> {
   }
 }
 
-export async function getHistory(limit = 50): Promise<AnalysisHistoryItem[]> {
+export async function getHistory(limit = 50, overrideBaseUrl?: string): Promise<AnalysisHistoryItem[]> {
   try {
-    const payload = await fetchJson<{ items: AnalysisHistoryItem[] }>(`/api/analysis/history?limit=${limit}`);
+    const payload = await fetchJson<{ items: AnalysisHistoryItem[] }>(
+      `/api/analysis/history?limit=${limit}`,
+      undefined,
+      overrideBaseUrl
+    );
     return payload.items ?? [];
   } catch {
     return [];
   }
 }
 
-export async function getWatchlist(limit = 100): Promise<WatchlistItem[]> {
+export async function getWatchlist(limit = 100, overrideBaseUrl?: string): Promise<WatchlistItem[]> {
   try {
-    const payload = await fetchJson<{ items: WatchlistItem[] }>(`/api/watchlist?limit=${limit}`);
+    const payload = await fetchJson<{ items: WatchlistItem[] }>(
+      `/api/watchlist?limit=${limit}`,
+      undefined,
+      overrideBaseUrl
+    );
     return payload.items ?? [];
   } catch {
     return [];
