@@ -17,3 +17,9 @@ data/*.xlsx
 
 # Runtime logs
 streamlit_cockpit*.log
+
+# Local test and inspection artifacts
+pytest_temp/
+next-local-dashboard.png
+streamlit-local.png
+.vercel/

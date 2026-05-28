@@ -47,6 +47,9 @@ class MarketDataService:
     def get_supported_timeframes(self) -> tuple[str, ...]:
         return SETTINGS.supported_timeframes
 
+    def get_symbol_categories(self) -> dict[str, tuple[str, ...]]:
+        return SYMBOL_CATEGORIES
+
     def validate_symbol(self, symbol: str) -> str:
         normalized = _normalize_symbol(symbol)
         allowed = set(self.get_supported_symbols())
@@ -85,7 +88,9 @@ class MarketDataService:
                     "Volume": float(1_500 + (index % 40) * 35),
                 }
             )
-        return pd.DataFrame(rows)
+        frame = pd.DataFrame(rows)
+        frame.attrs["source"] = "dummy"
+        return frame
 
 
 def get_market_data(symbol: str, timeframe: str) -> pd.DataFrame:
@@ -98,6 +103,10 @@ def get_supported_symbols() -> tuple[str, ...]:
 
 def get_supported_timeframes() -> tuple[str, ...]:
     return SETTINGS.supported_timeframes
+
+
+def get_symbol_categories() -> dict[str, tuple[str, ...]]:
+    return SYMBOL_CATEGORIES
 
 
 def validate_symbol(symbol: str) -> str:
@@ -126,14 +135,35 @@ def _build_default_service_config() -> MarketDataServiceConfig:
         },
         provider_symbol_map={
             "XAUUSD": "GC=F",
+            "XAGUSD": "SI=F",
+            "USOIL": "CL=F",
             "BTCUSD": "BTC-USD",
             "ETHUSD": "ETH-USD",
             "SOLUSD": "SOL-USD",
+            "BNBUSD": "BNB-USD",
+            "XRPUSD": "XRP-USD",
+            "ADAUSD": "ADA-USD",
+            "DOGEUSD": "DOGE-USD",
+            "AVAXUSD": "AVAX-USD",
+            "LINKUSD": "LINK-USD",
             "EURUSD": "EURUSD=X",
             "GBPUSD": "GBPUSD=X",
             "USDJPY": "JPY=X",
             "AUDUSD": "AUDUSD=X",
             "USDCAD": "CAD=X",
+            "USDCHF": "CHF=X",
+            "NZDUSD": "NZDUSD=X",
+            "EURJPY": "EURJPY=X",
+            "GBPJPY": "GBPJPY=X",
+            "AAPL": "AAPL",
+            "MSFT": "MSFT",
+            "NVDA": "NVDA",
+            "TSLA": "TSLA",
+            "AMZN": "AMZN",
+            "META": "META",
+            "GOOGL": "GOOGL",
+            "SPY": "SPY",
+            "QQQ": "QQQ",
         },
     )
 
@@ -148,6 +178,7 @@ def _normalize_frame(frame: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame(columns=["Timestamp", "Open", "High", "Low", "Close", "Volume"])
 
     result = frame.copy()
+    result.attrs.update(getattr(frame, "attrs", {}))
     required = ["Timestamp", "Open", "High", "Low", "Close"]
     for column in required:
         if column not in result.columns:
@@ -162,7 +193,9 @@ def _normalize_frame(frame: pd.DataFrame) -> pd.DataFrame:
 
     result = result.dropna(subset=["Timestamp", "Open", "High", "Low", "Close"])
     result = result.sort_values("Timestamp").reset_index(drop=True)
-    return result[["Timestamp", "Open", "High", "Low", "Close", "Volume"]]
+    normalized = result[["Timestamp", "Open", "High", "Low", "Close", "Volume"]]
+    normalized.attrs.update(result.attrs)
+    return normalized
 
 
 def _interval_to_timedelta(interval: str) -> timedelta:
@@ -174,5 +207,13 @@ def _interval_to_timedelta(interval: str) -> timedelta:
         "1d": timedelta(days=1),
     }
     return mapping.get(interval, timedelta(hours=1))
+
+
+SYMBOL_CATEGORIES: dict[str, tuple[str, ...]] = {
+    "crypto": ("BTCUSD", "ETHUSD", "SOLUSD", "BNBUSD", "XRPUSD", "ADAUSD", "DOGEUSD", "AVAXUSD", "LINKUSD"),
+    "forex": ("EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD", "EURJPY", "GBPJPY"),
+    "commodities": ("XAUUSD", "XAGUSD", "USOIL"),
+    "stocks": ("AAPL", "MSFT", "NVDA", "TSLA", "AMZN", "META", "GOOGL", "SPY", "QQQ"),
+}
 
 

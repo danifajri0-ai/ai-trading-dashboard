@@ -2,6 +2,8 @@ import type { AnalysisHistoryItem, AnalysisResult, CockpitAnalysisResult, Symbol
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
 
+export type ApiConfigState = "configured" | "auto_vercel" | "local_default";
+
 export class ApiUnavailableError extends Error {
   code: string;
   path: string;
@@ -16,15 +18,43 @@ export class ApiUnavailableError extends Error {
   }
 }
 
-function getApiBaseUrl(): string {
+function normalizeBaseUrl(value: string): string {
+  return value.replace(/\/+$/, "");
+}
+
+function getVercelApiBaseUrl(): string | null {
+  const host = process.env.VERCEL_URL?.trim();
+  if (!host) {
+    return null;
+  }
+  const normalizedHost = host.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
+  if (!normalizedHost) {
+    return null;
+  }
+  return `https://${normalizedHost}/backend`;
+}
+
+export function getApiConfigState(): ApiConfigState {
   const configured = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
-  if (!configured) {
-    return DEFAULT_API_BASE_URL;
+  if (configured && /^https?:\/\//i.test(configured)) {
+    return "configured";
   }
-  if (!/^https?:\/\//i.test(configured)) {
-    return DEFAULT_API_BASE_URL;
+  if (getVercelApiBaseUrl()) {
+    return "auto_vercel";
   }
-  return configured.replace(/\/+$/, "");
+  return "local_default";
+}
+
+export function getApiBaseUrl(): string {
+  const configured = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+  if (configured && /^https?:\/\//i.test(configured)) {
+    return normalizeBaseUrl(configured);
+  }
+  const vercelBaseUrl = getVercelApiBaseUrl();
+  if (vercelBaseUrl) {
+    return vercelBaseUrl;
+  }
+  return DEFAULT_API_BASE_URL;
 }
 
 async function fetchJson<T>(path: string, init?: RequestInit): Promise<T> {

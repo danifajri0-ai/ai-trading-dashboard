@@ -1,5 +1,5 @@
 import { CockpitConsole, PairTimeframeSelector } from "@/components/CockpitConsole";
-import { getCockpitAnalysis, getSymbols } from "@/lib/api";
+import { getApiConfigState, getCockpitAnalysis, getSymbols } from "@/lib/api";
 
 type MarketPageProps = {
   params: {
@@ -21,7 +21,8 @@ export default async function MarketSymbolPage({ params, searchParams }: MarketP
   }
   const selectedSymbol = normalizeChoice(params.symbol, symbolsPayload?.symbols ?? [], "BTCUSD");
   const selectedTimeframe = normalizeChoice(searchParams?.timeframe, symbolsPayload?.timeframes ?? [], "H1");
-  const apiStatus = process.env.NEXT_PUBLIC_API_BASE_URL ? "configured" : "unconfigured";
+  const apiConfigState = getApiConfigState();
+  const apiStatus = apiConfigState === "local_default" ? "unconfigured" : "configured";
   let result = null;
   let loadError = "";
   if (symbolsPayload) {

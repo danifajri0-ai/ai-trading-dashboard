@@ -37,6 +37,13 @@ REQUIRED_PRICE_COLUMNS: tuple[str, ...] = ("Open", "High", "Low", "Close")
 BINANCE_SYMBOLS: dict[str, str] = {
     "BTC-USD": "BTCUSDT",
     "ETH-USD": "ETHUSDT",
+    "SOL-USD": "SOLUSDT",
+    "BNB-USD": "BNBUSDT",
+    "XRP-USD": "XRPUSDT",
+    "ADA-USD": "ADAUSDT",
+    "DOGE-USD": "DOGEUSDT",
+    "AVAX-USD": "AVAXUSDT",
+    "LINK-USD": "LINKUSDT",
 }
 
 BINANCE_INTERVAL_MILLISECONDS: dict[str, int] = {
@@ -117,6 +124,8 @@ def fetch_market_data(symbol: str, period: str, interval: str) -> pd.DataFrame:
         try:
             data = fetch_binance_klines(BINANCE_SYMBOLS[symbol], period, interval)
             if not data.empty:
+                data.attrs["source"] = "binance"
+                data.attrs["provider_symbol"] = BINANCE_SYMBOLS[symbol]
                 return data
         except Exception:
             # Binance may be blocked in some networks/regions. Yahoo remains the
@@ -141,6 +150,8 @@ def fetch_market_data(symbol: str, period: str, interval: str) -> pd.DataFrame:
     if data.empty:
         raise MarketDataError("Data kosong. Coba pair, periode, atau timeframe lain.")
 
+    data.attrs["source"] = "yahoo"
+    data.attrs["provider_symbol"] = symbol
     return data
 
 

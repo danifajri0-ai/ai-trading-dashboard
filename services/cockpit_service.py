@@ -250,12 +250,15 @@ def build_cockpit_result(
 def _price_snapshot(result: AnalysisResult, market_frame: pd.DataFrame | None) -> PriceSnapshot:
     latest = _latest_market_row(market_frame)
     if latest is not None:
+        source = getattr(market_frame, "attrs", {}).get("source") if isinstance(market_frame, pd.DataFrame) else None
+        provider_symbol = getattr(market_frame, "attrs", {}).get("provider_symbol") if isinstance(market_frame, pd.DataFrame) else None
+        source_label = _price_source_label(source, provider_symbol)
         return PriceSnapshot(
             status="available",
             symbol=result.symbol,
             timeframe=result.timeframe,
             last_price=_float_or_none(latest.get("Close")),
-            price_source="market_data_service",
+            price_source=source_label,
             updated_at=_timestamp_or_none(latest.get("Timestamp")),
             notes=["Price snapshot is derived from the latest OHLCV candle."],
         )
@@ -527,13 +530,25 @@ def _performance_memory_unavailable(reason: str) -> dict[str, Any]:
 
 def _asset_class_for_symbol(symbol: str) -> str:
     normalized = symbol.upper()
-    if normalized in {"BTCUSD", "ETHUSD", "SOLUSD"}:
+    if normalized in {"BTCUSD", "ETHUSD", "SOLUSD", "BNBUSD", "XRPUSD", "ADAUSD", "DOGEUSD", "AVAXUSD", "LINKUSD"}:
         return "crypto"
-    if normalized in {"EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD"}:
+    if normalized in {"EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCAD", "USDCHF", "NZDUSD", "EURJPY", "GBPJPY"}:
         return "forex"
-    if normalized == "XAUUSD":
+    if normalized in {"XAUUSD", "XAGUSD", "USOIL"}:
         return "commodity"
-    return "unknown"
+    return "equity"
+
+
+def _price_source_label(source: object, provider_symbol: object) -> str:
+    normalized = str(source or "unknown").lower()
+    symbol = str(provider_symbol or "").strip()
+    if normalized == "binance":
+        return f"Binance Public Klines ({symbol})" if symbol else "Binance Public Klines"
+    if normalized == "yahoo":
+        return f"Yahoo Finance ({symbol})" if symbol else "Yahoo Finance"
+    if normalized == "dummy":
+        return "synthetic_fallback"
+    return "market_data_service"
 
 
 def _merge_sentiment_status(provider_status: object, scoring_status: object) -> str:

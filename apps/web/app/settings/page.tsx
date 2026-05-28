@@ -1,9 +1,11 @@
+import { getApiConfigState } from "@/lib/api";
+
 export const metadata = {
   title: "Settings | AI Trading Dashboard"
 };
 
 export default function SettingsPage() {
-  const apiConfigured = Boolean(process.env.NEXT_PUBLIC_API_BASE_URL);
+  const apiConfigState = getApiConfigState();
   const supabaseUrlConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
   const supabaseKeyConfigured = Boolean(process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY);
 
@@ -19,7 +21,13 @@ export default function SettingsPage() {
         <h3>Environment</h3>
         <div className="kv">
           <span>API Base URL Status</span>
-          <strong>{apiConfigured ? "configured" : "not set (strict backend mode blocks live analysis)"}</strong>
+          <strong>
+            {apiConfigState === "configured"
+              ? "configured"
+              : apiConfigState === "auto_vercel"
+                ? "auto-detected from Vercel deployment"
+                : "not set (strict backend mode blocks live analysis outside local dev)"}
+          </strong>
         </div>
         <div className="kv">
           <span>Supabase URL Status</span>

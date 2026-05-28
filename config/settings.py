@@ -39,14 +39,35 @@ class TradingDashboardSettings:
     allowed_origins: tuple[str, ...] = ("http://localhost:3000", "http://127.0.0.1:3000")
     supported_symbols: tuple[str, ...] = (
         "XAUUSD",
+        "XAGUSD",
+        "USOIL",
         "BTCUSD",
         "ETHUSD",
         "SOLUSD",
+        "BNBUSD",
+        "XRPUSD",
+        "ADAUSD",
+        "DOGEUSD",
+        "AVAXUSD",
+        "LINKUSD",
         "EURUSD",
         "GBPUSD",
         "USDJPY",
         "AUDUSD",
         "USDCAD",
+        "USDCHF",
+        "NZDUSD",
+        "EURJPY",
+        "GBPJPY",
+        "AAPL",
+        "MSFT",
+        "NVDA",
+        "TSLA",
+        "AMZN",
+        "META",
+        "GOOGL",
+        "SPY",
+        "QQQ",
     )
     supported_timeframes: tuple[str, ...] = ("M15", "M30", "H1", "H4", "D1")
     indicators: IndicatorSettings = IndicatorSettings()
@@ -105,4 +126,3 @@ def _csv_tuple(value: str | None) -> tuple[str, ...]:
 
 
 SETTINGS = _load_settings()
-

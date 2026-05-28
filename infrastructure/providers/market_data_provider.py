@@ -33,14 +33,16 @@ class MarketDataProvider:
 
         try:
             frame = fetch_market_data(request.symbol, request.period, request.interval)
-            source = "live"
+            source = str(frame.attrs.get("source") or "live")
         except Exception:
             frame = self._build_dummy_ohlcv(request.interval, points=200)
             source = "dummy"
+            frame.attrs["source"] = "dummy"
+            frame.attrs["provider_symbol"] = request.symbol
 
         if self.cache_provider is not None and not frame.empty:
             payload = _frame_to_payload(frame)
-            payload["_meta"] = {"source": source}
+            payload["_meta"] = {"source": source, "provider_symbol": request.symbol}
             self.cache_provider.set(cache_key, payload, ttl_seconds=self.cache_ttl_seconds)
 
         return frame
@@ -101,6 +103,10 @@ def _frame_from_payload(payload: dict[str, Any]) -> pd.DataFrame:
     if not isinstance(rows, list) or not rows:
         return pd.DataFrame()
     frame = pd.DataFrame(rows)
+    meta = payload.get("_meta")
+    if isinstance(meta, dict):
+        frame.attrs["source"] = meta.get("source")
+        frame.attrs["provider_symbol"] = meta.get("provider_symbol")
     if "Timestamp" in frame.columns:
         frame["Timestamp"] = pd.to_datetime(frame["Timestamp"], errors="coerce", utc=True)
     return frame
