@@ -405,18 +405,29 @@ export async function getCockpitAnalysis(
   timeframe = "H1",
   options?: ApiRequestOptions | string
 ): Promise<CockpitAnalysisResult> {
+  let primaryError: Error | null = null;
   try {
     return await fetchJson<CockpitAnalysisResult>("/cockpit/analyze", {
       method: "POST",
       body: JSON.stringify({ symbol, timeframe })
     }, options);
-  } catch {
-    const legacy = await fetchJson<LegacyAnalysisPayload>(
-      `/api/analysis/${encodeURIComponent(toLegacyTicker(symbol))}`,
-      undefined,
-      options
-    );
-    return mapLegacyToCockpit(legacy, timeframe);
+  } catch (error) {
+    primaryError = error instanceof Error ? error : new Error("Unknown /cockpit/analyze failure.");
+    try {
+      const legacy = await fetchJson<LegacyAnalysisPayload>(
+        `/api/analysis/${encodeURIComponent(toLegacyTicker(symbol))}`,
+        undefined,
+        options
+      );
+      return mapLegacyToCockpit(legacy, timeframe);
+    } catch (legacyError) {
+      const legacyMessage =
+        legacyError instanceof Error ? legacyError.message : "Legacy compatibility lookup failed.";
+      throw new ApiUnavailableError(
+        "/api/analysis",
+        `Primary /cockpit/analyze failed: ${primaryError.message}. Legacy fallback failed: ${legacyMessage}`
+      );
+    }
   }
 }
 
