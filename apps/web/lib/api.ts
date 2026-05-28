@@ -421,13 +421,15 @@ export async function getCockpitAnalysis(
 }
 
 export async function getSymbols(options?: ApiRequestOptions | string): Promise<SymbolsPayload> {
+  let primaryError: Error | null = null;
   try {
     const payload = await fetchJson<SymbolsPayload>("/symbols", undefined, options);
     if (!Array.isArray(payload.symbols) || !Array.isArray(payload.timeframes)) {
       throw new ApiUnavailableError("/symbols", "API symbols payload is invalid.");
     }
     return payload;
-  } catch {
+  } catch (error) {
+    primaryError = error instanceof Error ? error : new Error("Unknown /symbols failure.");
     const queries = ["BTC", "ETH", "AAPL", "TSLA", "EUR", "XAU"];
     const symbols = new Set<string>();
     for (const q of queries) {
@@ -447,7 +449,11 @@ export async function getSymbols(options?: ApiRequestOptions | string): Promise<
       }
     }
     if (!symbols.size) {
-      throw new ApiUnavailableError("/api/portfolio/search", "Legacy backend symbol discovery failed.");
+      const primaryMessage = primaryError.message || "Primary backend lookup failed.";
+      throw new ApiUnavailableError(
+        "/api/portfolio/search",
+        `Primary /symbols failed: ${primaryMessage}. Legacy backend symbol discovery failed.`
+      );
     }
     return {
       symbols: Array.from(symbols).sort((a, b) => a.localeCompare(b)),
