@@ -6,7 +6,7 @@
       "routePrefix": "/"
     },
     "api": {
-      "entrypoint": "apps/api/main.py",
+      "entrypoint": "apps/api/vercel_entry.py",
       "routePrefix": "/backend"
     }
   }
