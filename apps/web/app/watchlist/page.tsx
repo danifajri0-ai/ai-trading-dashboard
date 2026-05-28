@@ -1,12 +1,15 @@
+import { headers } from "next/headers";
+
 import { WatchlistTable } from "@/components/WatchlistTable";
-import { getWatchlist } from "@/lib/api";
+import { buildServerApiRequestOptions, getWatchlist } from "@/lib/api";
 
 export const metadata = {
   title: "Watchlist | AI Trading Dashboard"
 };
 
 export default async function WatchlistPage() {
-  const items = await getWatchlist(100);
+  const apiRequestOptions = buildServerApiRequestOptions(headers());
+  const items = await getWatchlist(100, apiRequestOptions);
 
   return (
     <main className="grid" style={{ gap: 14 }}>

@@ -1,12 +1,15 @@
+import { headers } from "next/headers";
+
 import { AnalysisHistory } from "@/components/AnalysisHistory";
-import { getHistory } from "@/lib/api";
+import { buildServerApiRequestOptions, getHistory } from "@/lib/api";
 
 export const metadata = {
   title: "History | AI Trading Dashboard"
 };
 
 export default async function HistoryPage() {
-  const items = await getHistory(100);
+  const apiRequestOptions = buildServerApiRequestOptions(headers());
+  const items = await getHistory(100, apiRequestOptions);
 
   return (
     <main className="grid" style={{ gap: 14 }}>

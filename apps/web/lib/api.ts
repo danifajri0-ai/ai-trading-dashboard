@@ -3,6 +3,10 @@ import type { AnalysisHistoryItem, AnalysisResult, CockpitAnalysisResult, Symbol
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
 
 export type ApiConfigState = "configured" | "auto_vercel" | "local_default";
+export type ApiRequestOptions = {
+  baseUrl?: string;
+  headers?: HeadersInit;
+};
 
 export class ApiUnavailableError extends Error {
   code: string;
@@ -34,6 +38,34 @@ function getVercelApiBaseUrl(): string | null {
   return `https://${normalizedHost}/backend`;
 }
 
+export function buildServerApiRequestOptions(requestHeaders: Headers): ApiRequestOptions {
+  const requestHost = requestHeaders.get("x-forwarded-host") || requestHeaders.get("host");
+  const requestProto = requestHeaders.get("x-forwarded-proto") || "https";
+  const forwardedHeaders: Record<string, string> = {};
+  const cookieHeader = requestHeaders.get("cookie");
+  const authorizationHeader = requestHeaders.get("authorization");
+  const bypassHeader = requestHeaders.get("x-vercel-protection-bypass");
+  const setBypassCookieHeader = requestHeaders.get("x-vercel-set-bypass-cookie");
+
+  if (cookieHeader) {
+    forwardedHeaders.cookie = cookieHeader;
+  }
+  if (authorizationHeader) {
+    forwardedHeaders.authorization = authorizationHeader;
+  }
+  if (bypassHeader) {
+    forwardedHeaders["x-vercel-protection-bypass"] = bypassHeader;
+  }
+  if (setBypassCookieHeader) {
+    forwardedHeaders["x-vercel-set-bypass-cookie"] = setBypassCookieHeader;
+  }
+
+  return {
+    baseUrl: requestHost ? `${requestProto}://${requestHost}/backend` : undefined,
+    headers: forwardedHeaders
+  };
+}
+
 export function getApiConfigState(): ApiConfigState {
   const configured = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
   if (configured && /^https?:\/\//i.test(configured)) {
@@ -57,20 +89,30 @@ export function getApiBaseUrl(): string {
   return DEFAULT_API_BASE_URL;
 }
 
-function resolveApiBaseUrl(overrideBaseUrl?: string): string {
+function resolveApiBaseUrl(options?: ApiRequestOptions | string): string {
+  const overrideBaseUrl = typeof options === "string" ? options : options?.baseUrl;
   if (overrideBaseUrl && /^https?:\/\//i.test(overrideBaseUrl)) {
     return normalizeBaseUrl(overrideBaseUrl);
   }
   return getApiBaseUrl();
 }
 
-async function fetchJson<T>(path: string, init?: RequestInit, overrideBaseUrl?: string): Promise<T> {
-  const url = `${resolveApiBaseUrl(overrideBaseUrl)}${path}`;
+function resolveForwardedHeaders(options?: ApiRequestOptions | string): HeadersInit | undefined {
+  if (!options || typeof options === "string") {
+    return undefined;
+  }
+  return options.headers;
+}
+
+async function fetchJson<T>(path: string, init?: RequestInit, options?: ApiRequestOptions | string): Promise<T> {
+  const url = `${resolveApiBaseUrl(options)}${path}`;
+  const forwardedHeaders = resolveForwardedHeaders(options);
   try {
     const response = await fetch(url, {
       ...init,
       headers: {
         "Content-Type": "application/json",
+        ...(forwardedHeaders || {}),
         ...(init?.headers || {})
       },
       cache: "no-store"
@@ -340,18 +382,18 @@ function mapLegacyToCockpit(payload: LegacyAnalysisPayload, timeframe: string): 
 export async function getAnalysis(
   symbol = "BTCUSD",
   timeframe = "H1",
-  overrideBaseUrl?: string
+  options?: ApiRequestOptions | string
 ): Promise<AnalysisResult> {
   try {
     return await fetchJson<AnalysisResult>("/analyze", {
       method: "POST",
       body: JSON.stringify({ symbol, timeframe })
-    }, overrideBaseUrl);
+    }, options);
   } catch {
     const legacy = await fetchJson<LegacyAnalysisPayload>(
       `/api/analysis/${encodeURIComponent(toLegacyTicker(symbol))}`,
       undefined,
-      overrideBaseUrl
+      options
     );
     const mapped = mapLegacyToCockpit(legacy, timeframe);
     return mapped.legacy_result as AnalysisResult;
@@ -361,26 +403,26 @@ export async function getAnalysis(
 export async function getCockpitAnalysis(
   symbol = "BTCUSD",
   timeframe = "H1",
-  overrideBaseUrl?: string
+  options?: ApiRequestOptions | string
 ): Promise<CockpitAnalysisResult> {
   try {
     return await fetchJson<CockpitAnalysisResult>("/cockpit/analyze", {
       method: "POST",
       body: JSON.stringify({ symbol, timeframe })
-    }, overrideBaseUrl);
+    }, options);
   } catch {
     const legacy = await fetchJson<LegacyAnalysisPayload>(
       `/api/analysis/${encodeURIComponent(toLegacyTicker(symbol))}`,
       undefined,
-      overrideBaseUrl
+      options
     );
     return mapLegacyToCockpit(legacy, timeframe);
   }
 }
 
-export async function getSymbols(overrideBaseUrl?: string): Promise<SymbolsPayload> {
+export async function getSymbols(options?: ApiRequestOptions | string): Promise<SymbolsPayload> {
   try {
-    const payload = await fetchJson<SymbolsPayload>("/symbols", undefined, overrideBaseUrl);
+    const payload = await fetchJson<SymbolsPayload>("/symbols", undefined, options);
     if (!Array.isArray(payload.symbols) || !Array.isArray(payload.timeframes)) {
       throw new ApiUnavailableError("/symbols", "API symbols payload is invalid.");
     }
@@ -393,7 +435,7 @@ export async function getSymbols(overrideBaseUrl?: string): Promise<SymbolsPaylo
         const items = await fetchJson<Array<{ symbol?: string }>>(
           `/api/portfolio/search?q=${encodeURIComponent(q)}`,
           undefined,
-          overrideBaseUrl
+          options
         );
         for (const item of items) {
           if (item?.symbol) {
@@ -414,12 +456,12 @@ export async function getSymbols(overrideBaseUrl?: string): Promise<SymbolsPaylo
   }
 }
 
-export async function getHistory(limit = 50, overrideBaseUrl?: string): Promise<AnalysisHistoryItem[]> {
+export async function getHistory(limit = 50, options?: ApiRequestOptions | string): Promise<AnalysisHistoryItem[]> {
   try {
     const payload = await fetchJson<{ items: AnalysisHistoryItem[] }>(
       `/api/analysis/history?limit=${limit}`,
       undefined,
-      overrideBaseUrl
+      options
     );
     return payload.items ?? [];
   } catch {
@@ -427,12 +469,12 @@ export async function getHistory(limit = 50, overrideBaseUrl?: string): Promise<
   }
 }
 
-export async function getWatchlist(limit = 100, overrideBaseUrl?: string): Promise<WatchlistItem[]> {
+export async function getWatchlist(limit = 100, options?: ApiRequestOptions | string): Promise<WatchlistItem[]> {
   try {
     const payload = await fetchJson<{ items: WatchlistItem[] }>(
       `/api/watchlist?limit=${limit}`,
       undefined,
-      overrideBaseUrl
+      options
     );
     return payload.items ?? [];
   } catch {
