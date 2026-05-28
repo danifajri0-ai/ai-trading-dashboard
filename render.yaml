@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: ai-trading-dashboard-api
+    runtime: python
+    repo: https://github.com/danifajri0-ai/ai-trading-dashboard
+    branch: main
+    rootDir: .
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn apps.api.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: false
+    envVars:
+      - key: SUPABASE_ENABLED
+        value: "true"
+      - key: ALLOWED_ORIGINS
+        value: http://localhost:8501,http://127.0.0.1:8501,http://localhost:3000,http://127.0.0.1:3000,https://aitradingdashboardprototipe-danifajri-s-projects.vercel.app,https://aitradingdashboardprototipe-git-cod-07179e-danifajri-s-projects.vercel.app
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
