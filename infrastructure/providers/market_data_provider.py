@@ -34,15 +34,20 @@ class MarketDataProvider:
         try:
             frame = fetch_market_data(request.symbol, request.period, request.interval)
             source = str(frame.attrs.get("source") or "live")
-        except Exception:
+        except Exception as exc:
             frame = self._build_dummy_ohlcv(request.interval, points=200)
             source = "dummy"
             frame.attrs["source"] = "dummy"
             frame.attrs["provider_symbol"] = request.symbol
+            frame.attrs["fallback_reason"] = str(exc)
 
         if self.cache_provider is not None and not frame.empty:
             payload = _frame_to_payload(frame)
-            payload["_meta"] = {"source": source, "provider_symbol": request.symbol}
+            payload["_meta"] = {
+                "source": source,
+                "provider_symbol": request.symbol,
+                "fallback_reason": frame.attrs.get("fallback_reason"),
+            }
             self.cache_provider.set(cache_key, payload, ttl_seconds=self.cache_ttl_seconds)
 
         return frame
@@ -71,7 +76,9 @@ class MarketDataProvider:
                 }
             )
 
-        return pd.DataFrame(rows)
+        frame = pd.DataFrame(rows)
+        frame.attrs["source"] = "dummy"
+        return frame
 
 
 def _interval_to_timedelta(interval: str) -> timedelta:
@@ -107,6 +114,7 @@ def _frame_from_payload(payload: dict[str, Any]) -> pd.DataFrame:
     if isinstance(meta, dict):
         frame.attrs["source"] = meta.get("source")
         frame.attrs["provider_symbol"] = meta.get("provider_symbol")
+        frame.attrs["fallback_reason"] = meta.get("fallback_reason")
     if "Timestamp" in frame.columns:
         frame["Timestamp"] = pd.to_datetime(frame["Timestamp"], errors="coerce", utc=True)
     return frame

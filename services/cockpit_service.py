@@ -252,7 +252,11 @@ def _price_snapshot(result: AnalysisResult, market_frame: pd.DataFrame | None) -
     if latest is not None:
         source = getattr(market_frame, "attrs", {}).get("source") if isinstance(market_frame, pd.DataFrame) else None
         provider_symbol = getattr(market_frame, "attrs", {}).get("provider_symbol") if isinstance(market_frame, pd.DataFrame) else None
+        fallback_reason = getattr(market_frame, "attrs", {}).get("fallback_reason") if isinstance(market_frame, pd.DataFrame) else None
         source_label = _price_source_label(source, provider_symbol)
+        notes = ["Price snapshot is derived from the latest OHLCV candle."]
+        if isinstance(fallback_reason, str) and fallback_reason.strip():
+            notes.append(f"Fallback reason: {fallback_reason.strip()}")
         return PriceSnapshot(
             status="available",
             symbol=result.symbol,
@@ -260,7 +264,7 @@ def _price_snapshot(result: AnalysisResult, market_frame: pd.DataFrame | None) -
             last_price=_float_or_none(latest.get("Close")),
             price_source=source_label,
             updated_at=_timestamp_or_none(latest.get("Timestamp")),
-            notes=["Price snapshot is derived from the latest OHLCV candle."],
+            notes=notes,
         )
 
     return PriceSnapshot(
