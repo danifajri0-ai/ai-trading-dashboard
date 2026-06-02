@@ -31,11 +31,21 @@ Catatan:
 3. Jalankan script schema dari:
    - `supabase/migrations/0001_optional_persistence.sql`
    - `supabase/migrations/0002_multi_user_foundation.sql`
+   - `supabase/migrations/0003_align_user_profiles_live_contract.sql`
+   - `supabase/migrations/0004_revoke_anon_mutable_table_privileges.sql`
 4. Ambil nilai:
    - Project URL -> `SUPABASE_URL`
    - Service role key -> `SUPABASE_SERVICE_ROLE_KEY`
    - Anon key -> `SUPABASE_ANON_KEY`
 5. Simpan di environment lokal/hosting.
+
+## 3a) Catatan Penting Untuk Vercel
+
+- Untuk topology repo ini, env backend production harus dipasang di project Vercel root `ai_trading_dashboard_prototipe`.
+- Jangan mengandalkan project Vercel `web` terpisah sebagai source of truth production kecuali memang sengaja dihidupkan lagi.
+- Jika `SUPABASE_ENABLED=true` tetapi `SUPABASE_URL` atau `SUPABASE_SERVICE_ROLE_KEY` kosong di root project, backend akan tetap startup tetapi persistence otomatis masuk mode disabled.
+- `SUPABASE_SERVICE_ROLE_KEY` hanya dipakai backend route `/backend/api/*`. Jangan pernah ditaruh di `NEXT_PUBLIC_*`.
+- `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` belum wajib untuk arsitektur sekarang karena browser auth/client Supabase belum menjadi jalur utama.
 
 ## 4) SQL Table yang Dibutuhkan
 
@@ -49,13 +59,21 @@ Tabel minimal:
 SQL tersedia di:
 - `supabase/migrations/0001_optional_persistence.sql`
 - `supabase/migrations/0002_multi_user_foundation.sql`
+- `supabase/migrations/0003_align_user_profiles_live_contract.sql`
+- `supabase/migrations/0004_revoke_anon_mutable_table_privileges.sql`
 
 Kolom utama:
 - `analysis_logs`: `user_id`, `symbol`, `timeframe`, `signal`, `bias`, `confidence`, `summary`, `raw_payload`, `created_at`
 - `watchlists`: `user_id`, `symbol`, `market_type`, `notes`, `created_at`
-- `user_profiles`: `id`, `email`, `display_name`, `tier` (`free|plus|pro`), `is_active`, `created_at`, `updated_at`
+- `user_profiles`: live project saat ini memakai `id`, `email`, `full_name`, `role`, `created_at`
 - `tier_limits`: batas fitur per tier (`free`, `plus`, `pro`)
 - `user_usage_events`: log event penggunaan per user untuk fondasi quota/billing
+
+Catatan kompatibilitas:
+- API repo ini tetap menerima `display_name` / `tier` untuk kompatibilitas.
+- Persistence layer akan memetakan itu ke schema live `full_name` / `role`.
+- Field `is_active` belum ada di schema live production saat ini, jadi dianggap `true` secara kompatibilitas API.
+- Akses `anon` pada tabel mutable dibatasi lagi lewat migration `0004`; yang tersisa hanya `SELECT` pada `tier_limits`.
 
 ## 5) Cara Test Koneksi Lokal
 
@@ -96,3 +114,16 @@ Perilaku saat disabled:
 - Endpoint health tetap normal.
 - Endpoint persistence memberi respons jelas bahwa Supabase disabled/unavailable.
 - Endpoint analisis utama tetap berjalan.
+
+## 7) Catatan Performance Advisor
+
+Saat project masih minim traffic, Supabase bisa menandai beberapa index sebagai `unused_index`.
+Untuk repo ini, itu belum otomatis berarti index harus dihapus karena:
+- tabel persistence production masih bisa kosong atau sangat kecil
+- query history/watchlist tetap butuh index yang sudah ada untuk skala saat data mulai tumbuh
+- pruning index sebaiknya dilakukan setelah ada pola traffic nyata, bukan hanya dari snapshot awal
+
+Urutan aman:
+1. biarkan index tetap aktif saat fase awal produksi
+2. amati `pg_stat_user_indexes` setelah traffic masuk
+3. hapus index hanya kalau benar-benar konsisten tidak dipakai dan tidak menutup query penting

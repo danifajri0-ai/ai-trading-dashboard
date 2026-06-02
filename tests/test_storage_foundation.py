@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from pathlib import Path
+
+from infrastructure.providers.cache_provider import FileCacheProvider
 from infrastructure.storage import JsonlStore, SQLiteStore
 
 
@@ -32,4 +35,18 @@ def test_sqlite_store_creates_database_and_reads_records(tmp_path) -> None:
     assert snapshot_id > signal_id
     assert len(store.read_records()) == 2
     assert store.read_records(record_type="snapshot")[0]["payload"]["status"] == "available"
+
+
+def test_file_cache_provider_disables_itself_when_directory_is_unwritable(monkeypatch, tmp_path) -> None:
+    def fail_mkdir(self, parents=False, exist_ok=False):  # type: ignore[no-untyped-def]
+        raise PermissionError("read-only filesystem")
+
+    monkeypatch.setattr(Path, "mkdir", fail_mkdir)
+
+    provider = FileCacheProvider(tmp_path / "cache")
+    result = provider.set("btc-h1", {"value": 1}, ttl_seconds=60)
+
+    assert provider.enabled is False
+    assert provider.get("btc-h1") is None
+    assert result.payload["value"] == 1
 

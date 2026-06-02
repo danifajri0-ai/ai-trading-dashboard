@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import pandas as pd
 
-from config import SETTINGS
+from config import RUNTIME_PATHS, SETTINGS
 from infrastructure.providers import FileCacheProvider, MarketDataProvider, MarketDataRequest
 
 
@@ -22,7 +22,7 @@ class MarketDataService:
         service_config: MarketDataServiceConfig | None = None,
     ) -> None:
         self._service_config = service_config or _build_default_service_config()
-        self._provider = provider or MarketDataProvider(cache_provider=FileCacheProvider("data/cache"))
+        self._provider = provider or MarketDataProvider(cache_provider=FileCacheProvider(RUNTIME_PATHS.market_cache))
 
     def get_market_data(self, symbol: str, timeframe: str) -> pd.DataFrame:
         normalized_symbol = self.validate_symbol(symbol)

@@ -1,7 +1,14 @@
 import { headers } from "next/headers";
 
 import { CockpitConsole, PairTimeframeSelector } from "@/components/CockpitConsole";
-import { buildServerApiRequestOptions, getApiConfigState, getCockpitAnalysis, getSymbols } from "@/lib/api";
+import {
+  buildServerApiRequestOptions,
+  DEFAULT_SUPPORTED_SYMBOLS,
+  DEFAULT_SUPPORTED_TIMEFRAMES,
+  getApiConfigState,
+  getCockpitAnalysis,
+  getSymbols
+} from "@/lib/api";
 
 type DashboardPageProps = {
   searchParams?: {
@@ -13,28 +20,40 @@ type DashboardPageProps = {
 export default async function DashboardPage({ searchParams }: DashboardPageProps) {
   const requestHeaders = headers();
   const apiRequestOptions = buildServerApiRequestOptions(requestHeaders);
+  const requestedSymbol = normalizeChoice(searchParams?.symbol, Array.from(DEFAULT_SUPPORTED_SYMBOLS), "BTCUSD");
+  const requestedTimeframe = normalizeChoice(
+    searchParams?.timeframe,
+    Array.from(DEFAULT_SUPPORTED_TIMEFRAMES),
+    "H1"
+  );
+
+  const symbolsPromise = getSymbols(apiRequestOptions);
+  const analysisPromise = getCockpitAnalysis(requestedSymbol, requestedTimeframe, apiRequestOptions);
+
   let symbolsPayload = null;
   let symbolsError = "";
-  try {
-    symbolsPayload = await getSymbols(apiRequestOptions);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "API response unavailable.";
-    symbolsError = `Symbol catalog unavailable from backend. ${message}`;
-  }
-  const selectedSymbol = normalizeChoice(searchParams?.symbol, symbolsPayload?.symbols ?? [], "BTCUSD");
-  const selectedTimeframe = normalizeChoice(searchParams?.timeframe, symbolsPayload?.timeframes ?? [], "H1");
-  const apiConfigState = getApiConfigState();
-  const apiStatus = apiConfigState === "local_default" ? "unconfigured" : "configured";
   let result = null;
   let loadError = "";
-  if (symbolsPayload) {
-    try {
-      result = await getCockpitAnalysis(selectedSymbol, selectedTimeframe, apiRequestOptions);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "API response unavailable.";
-      loadError = `Cockpit data unavailable for ${selectedSymbol} ${selectedTimeframe}. ${message}`;
-    }
+  const [symbolsOutcome, analysisOutcome] = await Promise.allSettled([symbolsPromise, analysisPromise]);
+
+  if (symbolsOutcome.status === "fulfilled") {
+    symbolsPayload = symbolsOutcome.value;
+  } else {
+    const message = symbolsOutcome.reason instanceof Error ? symbolsOutcome.reason.message : "API response unavailable.";
+    symbolsError = `Symbol catalog unavailable from backend. ${message}`;
   }
+
+  if (analysisOutcome.status === "fulfilled") {
+    result = analysisOutcome.value;
+  } else {
+    const message = analysisOutcome.reason instanceof Error ? analysisOutcome.reason.message : "API response unavailable.";
+    loadError = `Cockpit data unavailable for ${requestedSymbol} ${requestedTimeframe}. ${message}`;
+  }
+
+  const selectedSymbol = normalizeChoice(searchParams?.symbol, symbolsPayload?.symbols ?? [], requestedSymbol);
+  const selectedTimeframe = normalizeChoice(searchParams?.timeframe, symbolsPayload?.timeframes ?? [], requestedTimeframe);
+  const apiConfigState = getApiConfigState();
+  const apiStatus = apiConfigState === "local_default" ? "unconfigured" : "configured";
 
   return (
     <>
@@ -53,9 +72,9 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           <p className="section-subtitle">{symbolsError || "Please verify API deployment and CORS settings."}</p>
         </section>
       )}
-      {symbolsPayload && result ? (
+      {result ? (
         <CockpitConsole result={result} apiStatus={apiStatus} />
-      ) : symbolsPayload ? (
+      ) : (
         <section className="card">
           <h2>Live Cockpit Unavailable</h2>
           <p className="section-subtitle">
@@ -63,7 +82,7 @@ export default async function DashboardPage({ searchParams }: DashboardPageProps
           </p>
           <p className="section-subtitle">{loadError || "Please verify API deployment and CORS settings."}</p>
         </section>
-      ) : null}
+      )}
     </>
   );
 }

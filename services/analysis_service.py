@@ -150,11 +150,18 @@ class AnalysisService:
         )
 
 
-_DEFAULT_ANALYSIS_SERVICE = AnalysisService(market_data_service=MarketDataService())
+_DEFAULT_ANALYSIS_SERVICE: AnalysisService | None = None
 
 
 def analyze_market(symbol: str, timeframe: str) -> AnalysisResult:
-    return _DEFAULT_ANALYSIS_SERVICE.analyze_market(symbol=symbol, timeframe=timeframe)
+    return _get_default_analysis_service().analyze_market(symbol=symbol, timeframe=timeframe)
+
+
+def _get_default_analysis_service() -> AnalysisService:
+    global _DEFAULT_ANALYSIS_SERVICE
+    if _DEFAULT_ANALYSIS_SERVICE is None:
+        _DEFAULT_ANALYSIS_SERVICE = AnalysisService(market_data_service=MarketDataService())
+    return _DEFAULT_ANALYSIS_SERVICE
 
 
 def _to_pair_label(symbol: str) -> str:

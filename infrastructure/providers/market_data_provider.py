@@ -7,7 +7,7 @@ from typing import Any
 import pandas as pd
 
 from infrastructure.providers.cache_provider import FileCacheProvider
-from market_data import fetch_market_data
+from infrastructure.providers.public_market_data import fetch_market_data
 
 
 @dataclass(frozen=True)

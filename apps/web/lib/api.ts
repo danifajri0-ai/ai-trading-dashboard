@@ -1,6 +1,50 @@
-import type { AnalysisHistoryItem, AnalysisResult, CockpitAnalysisResult, SymbolsPayload, WatchlistItem } from "@/lib/types";
+import type {
+  AnalysisHistoryItem,
+  AnalysisResult,
+  ApiHealthPayload,
+  CockpitAnalysisResult,
+  SymbolsPayload,
+  WatchlistItem
+} from "@/lib/types";
 
 const DEFAULT_API_BASE_URL = "http://127.0.0.1:8000";
+const DEFAULT_API_REQUEST_TIMEOUT_MS = 8000;
+const COHOSTED_VERCEL_HOST_MARKERS = ["aitradingdashboardprototipe"];
+
+export const DEFAULT_SUPPORTED_SYMBOLS = [
+  "XAUUSD",
+  "XAGUSD",
+  "USOIL",
+  "BTCUSD",
+  "ETHUSD",
+  "SOLUSD",
+  "BNBUSD",
+  "XRPUSD",
+  "ADAUSD",
+  "DOGEUSD",
+  "AVAXUSD",
+  "LINKUSD",
+  "EURUSD",
+  "GBPUSD",
+  "USDJPY",
+  "AUDUSD",
+  "USDCAD",
+  "USDCHF",
+  "NZDUSD",
+  "EURJPY",
+  "GBPJPY",
+  "AAPL",
+  "MSFT",
+  "NVDA",
+  "TSLA",
+  "AMZN",
+  "META",
+  "GOOGL",
+  "SPY",
+  "QQQ"
+] as const;
+
+export const DEFAULT_SUPPORTED_TIMEFRAMES = ["M15", "M30", "H1", "H4", "D1"] as const;
 
 export type ApiConfigState = "configured" | "auto_vercel" | "local_default";
 export type ApiRequestOptions = {
@@ -26,9 +70,36 @@ function normalizeBaseUrl(value: string): string {
   return value.replace(/\/+$/, "");
 }
 
+function getExplicitApiBaseUrl(): string | null {
+  const serverOnly = process.env.API_BASE_URL?.trim();
+  if (serverOnly && /^https?:\/\//i.test(serverOnly)) {
+    return normalizeBaseUrl(serverOnly);
+  }
+
+  const publicConfigured = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+  if (publicConfigured && /^https?:\/\//i.test(publicConfigured)) {
+    return normalizeBaseUrl(publicConfigured);
+  }
+
+  return null;
+}
+
+function isCoHostedVercelApiEnabled(host: string | null | undefined): boolean {
+  if (!host) {
+    return false;
+  }
+
+  if (process.env.NEXT_PUBLIC_ENABLE_COHOSTED_API?.trim().toLowerCase() === "true") {
+    return true;
+  }
+
+  const normalizedHost = host.replace(/^https?:\/\//i, "").toLowerCase();
+  return COHOSTED_VERCEL_HOST_MARKERS.some((marker) => normalizedHost.includes(marker));
+}
+
 function getVercelApiBaseUrl(): string | null {
   const host = process.env.VERCEL_URL?.trim();
-  if (!host) {
+  if (!host || !isCoHostedVercelApiEnabled(host)) {
     return null;
   }
   const normalizedHost = host.replace(/^https?:\/\//i, "").replace(/\/+$/, "");
@@ -39,6 +110,7 @@ function getVercelApiBaseUrl(): string | null {
 }
 
 export function buildServerApiRequestOptions(requestHeaders: Headers): ApiRequestOptions {
+  const explicitBaseUrl = getExplicitApiBaseUrl();
   const requestHost = requestHeaders.get("x-forwarded-host") || requestHeaders.get("host");
   const requestProto = requestHeaders.get("x-forwarded-proto") || "https";
   const forwardedHeaders: Record<string, string> = {};
@@ -61,14 +133,15 @@ export function buildServerApiRequestOptions(requestHeaders: Headers): ApiReques
   }
 
   return {
-    baseUrl: requestHost ? `${requestProto}://${requestHost}/backend` : undefined,
+    baseUrl:
+      explicitBaseUrl ||
+      (requestHost && isCoHostedVercelApiEnabled(requestHost) ? `${requestProto}://${requestHost}/backend` : undefined),
     headers: forwardedHeaders
   };
 }
 
 export function getApiConfigState(): ApiConfigState {
-  const configured = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
-  if (configured && /^https?:\/\//i.test(configured)) {
+  if (getExplicitApiBaseUrl()) {
     return "configured";
   }
   if (getVercelApiBaseUrl()) {
@@ -78,9 +151,9 @@ export function getApiConfigState(): ApiConfigState {
 }
 
 export function getApiBaseUrl(): string {
-  const configured = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
-  if (configured && /^https?:\/\//i.test(configured)) {
-    return normalizeBaseUrl(configured);
+  const explicit = getExplicitApiBaseUrl();
+  if (explicit) {
+    return explicit;
   }
   const vercelBaseUrl = getVercelApiBaseUrl();
   if (vercelBaseUrl) {
@@ -104,9 +177,36 @@ function resolveForwardedHeaders(options?: ApiRequestOptions | string): HeadersI
   return options.headers;
 }
 
+function getApiRequestTimeoutMs(): number {
+  const configuredValue = process.env.API_REQUEST_TIMEOUT_MS?.trim() || process.env.NEXT_PUBLIC_API_REQUEST_TIMEOUT_MS?.trim();
+  if (!configuredValue) {
+    return DEFAULT_API_REQUEST_TIMEOUT_MS;
+  }
+  const parsedValue = Number(configuredValue);
+  if (!Number.isFinite(parsedValue)) {
+    return DEFAULT_API_REQUEST_TIMEOUT_MS;
+  }
+  return Math.max(1000, Math.min(parsedValue, 30000));
+}
+
+function isAbortError(error: unknown): boolean {
+  return (
+    (typeof DOMException !== "undefined" && error instanceof DOMException && error.name === "AbortError") ||
+    (error instanceof Error && error.name === "AbortError")
+  );
+}
+
 async function fetchJson<T>(path: string, init?: RequestInit, options?: ApiRequestOptions | string): Promise<T> {
   const url = `${resolveApiBaseUrl(options)}${path}`;
   const forwardedHeaders = resolveForwardedHeaders(options);
+  const timeoutMs = getApiRequestTimeoutMs();
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : undefined;
+  const timeoutHandle =
+    controller && timeoutMs > 0
+      ? setTimeout(() => {
+          controller.abort();
+        }, timeoutMs)
+      : undefined;
   try {
     const response = await fetch(url, {
       ...init,
@@ -115,17 +215,29 @@ async function fetchJson<T>(path: string, init?: RequestInit, options?: ApiReque
         ...(forwardedHeaders || {}),
         ...(init?.headers || {})
       },
-      cache: "no-store"
+      cache: "no-store",
+      signal: controller?.signal
     });
     if (!response.ok) {
-      throw new ApiUnavailableError(path, `API request failed: ${response.status}`, response.status);
+      const detail = await readApiErrorDetail(response);
+      const message = detail
+        ? `API request failed: ${response.status}. ${detail}`
+        : `API request failed: ${response.status}`;
+      throw new ApiUnavailableError(path, message, response.status);
     }
     return (await response.json()) as T;
   } catch (error) {
     if (error instanceof ApiUnavailableError) {
       throw error;
     }
+    if (isAbortError(error)) {
+      throw new ApiUnavailableError(path, `API request timed out after ${timeoutMs}ms.`);
+    }
     throw new ApiUnavailableError(path, "API request could not be completed.");
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
+    }
   }
 }
 
@@ -443,20 +555,23 @@ export async function getSymbols(options?: ApiRequestOptions | string): Promise<
     primaryError = error instanceof Error ? error : new Error("Unknown /symbols failure.");
     const queries = ["BTC", "ETH", "AAPL", "TSLA", "EUR", "XAU"];
     const symbols = new Set<string>();
-    for (const q of queries) {
-      try {
-        const items = await fetchJson<Array<{ symbol?: string }>>(
+    const results = await Promise.allSettled(
+      queries.map((q) =>
+        fetchJson<Array<{ symbol?: string }>>(
           `/api/portfolio/search?q=${encodeURIComponent(q)}`,
           undefined,
           options
-        );
-        for (const item of items) {
-          if (item?.symbol) {
-            symbols.add(String(item.symbol).toUpperCase());
-          }
+        )
+      )
+    );
+    for (const result of results) {
+      if (result.status !== "fulfilled") {
+        continue;
+      }
+      for (const item of result.value) {
+        if (item?.symbol) {
+          symbols.add(String(item.symbol).toUpperCase());
         }
-      } catch {
-        // continue probing other queries
       }
     }
     if (!symbols.size) {
@@ -473,28 +588,45 @@ export async function getSymbols(options?: ApiRequestOptions | string): Promise<
   }
 }
 
-export async function getHistory(limit = 50, options?: ApiRequestOptions | string): Promise<AnalysisHistoryItem[]> {
+async function readApiErrorDetail(response: Response): Promise<string> {
+  const contentType = response.headers.get("content-type") || "";
   try {
-    const payload = await fetchJson<{ items: AnalysisHistoryItem[] }>(
-      `/api/analysis/history?limit=${limit}`,
-      undefined,
-      options
-    );
-    return payload.items ?? [];
+    if (contentType.includes("application/json")) {
+      const payload = (await response.json()) as { detail?: unknown; message?: unknown };
+      if (typeof payload.detail === "string" && payload.detail.trim()) {
+        return payload.detail.trim();
+      }
+      if (typeof payload.message === "string" && payload.message.trim()) {
+        return payload.message.trim();
+      }
+      return "";
+    }
+
+    const text = (await response.text()).trim();
+    return text;
   } catch {
-    return [];
+    return "";
   }
 }
 
+export async function getApiHealth(options?: ApiRequestOptions | string): Promise<ApiHealthPayload> {
+  return fetchJson<ApiHealthPayload>("/health", undefined, options);
+}
+
+export async function getHistory(limit = 50, options?: ApiRequestOptions | string): Promise<AnalysisHistoryItem[]> {
+  const payload = await fetchJson<{ items: AnalysisHistoryItem[] }>(
+    `/api/analysis/history?limit=${limit}`,
+    undefined,
+    options
+  );
+  return payload.items ?? [];
+}
+
 export async function getWatchlist(limit = 100, options?: ApiRequestOptions | string): Promise<WatchlistItem[]> {
-  try {
-    const payload = await fetchJson<{ items: WatchlistItem[] }>(
-      `/api/watchlist?limit=${limit}`,
-      undefined,
-      options
-    );
-    return payload.items ?? [];
-  } catch {
-    return [];
-  }
+  const payload = await fetchJson<{ items: WatchlistItem[] }>(
+    `/api/watchlist?limit=${limit}`,
+    undefined,
+    options
+  );
+  return payload.items ?? [];
 }

@@ -6,9 +6,11 @@ from pathlib import Path
 import sqlite3
 from typing import Any
 
+from config import RUNTIME_PATHS
+
 
 class SQLiteStore:
-    def __init__(self, db_path: str | Path = "data/cockpit/cockpit.db") -> None:
+    def __init__(self, db_path: str | Path = RUNTIME_PATHS.cockpit_db) -> None:
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
         self._ensure_schema()

@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from config import RUNTIME_PATHS
+
 
 @dataclass(frozen=True)
 class CacheItem:
@@ -15,11 +17,13 @@ class CacheItem:
 
 
 class FileCacheProvider:
-    def __init__(self, cache_dir: str | Path = "data/cache") -> None:
+    def __init__(self, cache_dir: str | Path = RUNTIME_PATHS.market_cache) -> None:
         self.cache_dir = Path(cache_dir)
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+        self.enabled = _ensure_directory(self.cache_dir)
 
     def get(self, key: str) -> dict[str, Any] | None:
+        if not self.enabled:
+            return None
         file_path = self._path_for_key(key)
         if not file_path.exists():
             return None
@@ -50,17 +54,25 @@ class FileCacheProvider:
             "expires_at": expires_at.isoformat() if expires_at else None,
             "data": data,
         }
-        file_path = self._path_for_key(key)
-        file_path.write_text(json.dumps(item, ensure_ascii=True), encoding="utf-8")
+        if self.enabled:
+            file_path = self._path_for_key(key)
+            try:
+                file_path.write_text(json.dumps(item, ensure_ascii=True), encoding="utf-8")
+            except OSError:
+                self.enabled = False
         return CacheItem(key=key, payload=data, expires_at=expires_at)
 
     def delete(self, key: str) -> None:
+        if not self.enabled:
+            return
         try:
             self._path_for_key(key).unlink(missing_ok=True)
         except OSError:
             pass
 
     def clear(self) -> None:
+        if not self.enabled or not self.cache_dir.exists():
+            return
         for file_path in self.cache_dir.glob("*.json"):
             try:
                 file_path.unlink(missing_ok=True)
@@ -80,4 +92,12 @@ def _parse_iso(value: object) -> datetime | None:
     except ValueError:
         return None
     return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _ensure_directory(path: Path) -> bool:
+    try:
+        path.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return False
+    return True
 

@@ -141,23 +141,27 @@ class PersistenceService:
         user_id: str,
         email: str,
         display_name: str | None = None,
+        full_name: str | None = None,
         tier: Literal["free", "plus", "pro"] = "free",
+        role: Literal["free", "plus", "pro"] | None = None,
         is_active: bool = True,
     ) -> dict[str, Any]:
-        tier_normalized = _normalize_user_tier(tier)
-        payload = {
-            "id": user_id,
-            "email": email,
-            "display_name": display_name or "",
-            "tier": tier_normalized,
-            "is_active": bool(is_active),
-        }
+        payload = _build_user_profile_upsert_payload(
+            user_id=user_id,
+            email=email,
+            display_name=display_name,
+            full_name=full_name,
+            tier=tier,
+            role=role,
+            is_active=is_active,
+        )
         try:
-            return self.client.upsert_row("user_profiles", payload, on_conflict="id")
+            row = self.client.upsert_row("user_profiles", payload, on_conflict="id")
         except SupabaseDisabledError as exc:
             raise PersistenceUnavailableError(str(exc)) from exc
         except SupabaseRequestError as exc:
             raise PersistenceUnavailableError(str(exc)) from exc
+        return _normalize_user_profile_record(row)
 
     def get_user_profile(self, *, user_id: str) -> dict[str, Any] | None:
         query = {"select": "*", "id": f"eq.{user_id}", "limit": "1"}
@@ -167,7 +171,7 @@ class PersistenceService:
             raise PersistenceUnavailableError(str(exc)) from exc
         except SupabaseRequestError as exc:
             raise PersistenceUnavailableError(str(exc)) from exc
-        return rows[0] if rows else None
+        return _normalize_user_profile_record(rows[0]) if rows else None
 
     def list_tier_limits(self) -> list[dict[str, Any]]:
         query = {"select": "*", "order": "tier.asc"}
@@ -213,3 +217,35 @@ def _normalize_user_tier(value: str) -> str:
     if normalized in {"free", "plus", "pro"}:
         return normalized
     raise ValueError("Invalid user tier. Expected one of: free, plus, pro.")
+
+
+def _build_user_profile_upsert_payload(
+    *,
+    user_id: str,
+    email: str,
+    display_name: str | None,
+    full_name: str | None,
+    tier: str,
+    role: str | None,
+    is_active: bool,
+) -> dict[str, Any]:
+    normalized_tier = _normalize_user_tier(role or tier)
+    resolved_name = (full_name if full_name is not None else display_name) or ""
+    return {
+        "id": user_id,
+        "email": email,
+        "full_name": resolved_name,
+        "role": normalized_tier,
+    }
+
+
+def _normalize_user_profile_record(record: dict[str, Any]) -> dict[str, Any]:
+    role = _normalize_user_tier(str(record.get("role") or "free"))
+    full_name = str(record.get("full_name") or "")
+    normalized = dict(record)
+    normalized["full_name"] = full_name
+    normalized["role"] = role
+    normalized["display_name"] = full_name
+    normalized["tier"] = role
+    normalized["is_active"] = bool(record.get("is_active", True))
+    return normalized

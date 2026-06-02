@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 
 import { AnalysisHistory } from "@/components/AnalysisHistory";
+import type { AnalysisHistoryItem } from "@/lib/types";
 import { buildServerApiRequestOptions, getHistory } from "@/lib/api";
 
 export const metadata = {
@@ -9,7 +10,15 @@ export const metadata = {
 
 export default async function HistoryPage() {
   const apiRequestOptions = buildServerApiRequestOptions(headers());
-  const items = await getHistory(100, apiRequestOptions);
+  let items: AnalysisHistoryItem[] = [];
+  let loadError = "";
+
+  try {
+    items = await getHistory(100, apiRequestOptions);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "API response unavailable.";
+    loadError = `Analysis history unavailable from backend. ${message}`;
+  }
 
   return (
     <main className="grid" style={{ gap: 14 }}>
@@ -19,7 +28,16 @@ export default async function HistoryPage() {
           Riwayat output analisa untuk audit keputusan dan evaluasi setup.
         </p>
       </section>
-      <AnalysisHistory items={items} />
+      {loadError ? (
+        <section className="card">
+          <h3>History Unavailable</h3>
+          <p className="section-subtitle">
+            Frontend tidak menampilkan mock data untuk history. Verifikasi status persistence backend, URL API, dan env production.
+          </p>
+          <p className="section-subtitle">{loadError}</p>
+        </section>
+      ) : null}
+      {!loadError ? <AnalysisHistory items={items} /> : null}
     </main>
   );
 }

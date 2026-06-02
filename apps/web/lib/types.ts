@@ -56,6 +56,16 @@ export type WatchlistItem = {
   created_at: string;
 };
 
+export type ApiHealthPayload = {
+  status: string;
+  service: string;
+  persistence?: {
+    status?: "enabled" | "disabled" | "misconfigured" | string;
+    enabled?: boolean;
+    reason?: string | null;
+  };
+};
+
 export type SymbolsPayload = {
   symbols: string[];
   timeframes: string[];

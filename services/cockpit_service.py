@@ -6,6 +6,7 @@ from typing import Any
 
 import pandas as pd
 
+from config import RUNTIME_PATHS
 from domain.cockpit import (
     analyze_market_regime,
     analyze_market_structure,
@@ -52,7 +53,7 @@ COCKPIT_SCHEMA_VERSION = "cockpit.v1"
 class CockpitService:
     analysis_service: AnalysisService | None = None
     market_data_service: MarketDataService | None = None
-    signal_history_path: str | Path | None = "data/cockpit/signal_history.jsonl"
+    signal_history_path: str | Path | None = RUNTIME_PATHS.signal_history
     sentiment_provider: SentimentProvider | None = None
 
     def analyze_cockpit(self, symbol: str, timeframe: str) -> CockpitAnalysisResult:

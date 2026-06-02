@@ -7,11 +7,15 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
 from services.analysis_service import analyze_market
-from services.persistence_service import PersistenceUnavailableError, build_persistence_service
+from services.persistence_service import (
+    PersistenceService,
+    PersistenceUnavailableError,
+    build_persistence_service,
+)
 
 router = APIRouter(tags=["analysis"])
 logger = logging.getLogger(__name__)
-_PERSISTENCE_SERVICE = build_persistence_service()
+_PERSISTENCE_SERVICE: PersistenceService | None = None
 
 
 class AnalyzeRequestBody(BaseModel):
@@ -42,7 +46,7 @@ def analyze(body: AnalyzeRequestBody) -> dict:
 
 def _safe_save_analysis_history(payload: dict) -> None:
     try:
-        _PERSISTENCE_SERVICE.save_analysis_log(
+        _get_persistence_service().save_analysis_log(
             user_id=None,
             symbol=str(payload.get("symbol", "")),
             timeframe=str(payload.get("timeframe", "")),
@@ -56,6 +60,13 @@ def _safe_save_analysis_history(payload: dict) -> None:
     except (PersistenceUnavailableError, ValueError) as exc:
         # Non-breaking behavior: analyze response remains unchanged when persistence is unavailable.
         logger.warning("Analysis history persistence skipped: %s", exc)
+
+
+def _get_persistence_service() -> PersistenceService:
+    global _PERSISTENCE_SERVICE
+    if _PERSISTENCE_SERVICE is None:
+        _PERSISTENCE_SERVICE = build_persistence_service()
+    return _PERSISTENCE_SERVICE
 
 
 def _summary_from_payload(payload: dict) -> str:

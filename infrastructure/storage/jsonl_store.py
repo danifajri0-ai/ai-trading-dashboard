@@ -5,9 +5,11 @@ import json
 from pathlib import Path
 from typing import Any
 
+from config import RUNTIME_PATHS
+
 
 class JsonlStore:
-    def __init__(self, path: str | Path = "data/cockpit/signal_history.jsonl") -> None:
+    def __init__(self, path: str | Path = RUNTIME_PATHS.signal_history) -> None:
         self.path = Path(path)
 
     def append_signal_history(self, payload: dict[str, Any]) -> dict[str, Any]:

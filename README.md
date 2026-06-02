@@ -7,6 +7,12 @@ Trading dashboard dengan arsitektur layer bertahap:
 
 Dokumen ini fokus pada cara kerja arsitektur terbaru dan developer workflow.
 
+## Rujukan Inti
+
+- [API Contract Baseline](</C:/Users/Diel2011/Documents/Project LLM/ai_trading_dashboard_prototipe/docs/API_CONTRACT_BASELINE.md>)
+- [Supabase Setup](</C:/Users/Diel2011/Documents/Project LLM/ai_trading_dashboard_prototipe/docs/SUPABASE_SETUP.md>)
+- [UI Streamlit Baseline](</C:/Users/Diel2011/Documents/Project LLM/ai_trading_dashboard_prototipe/docs/UI_STREAMLIT_BASELINE.md>)
+
 ## Struktur Folder Terbaru
 
 ```text
@@ -28,6 +34,7 @@ ai_trading_dashboard_prototipe/
 ├── config/
 ├── tests/
 ├── scripts/
+├── runtime/                      # artefak lokal: cache market, signal history, sqlite
 ├── app.py                        # entrypoint lama (tetap tersedia)
 ├── market_data.py                # wrapper/backward compatibility
 ├── technical_analysis.py         # wrapper/backward compatibility
@@ -124,6 +131,29 @@ venv\Scripts\python.exe -m uvicorn apps.api.main:app --host 127.0.0.1 --port 800
 API docs:
 - http://127.0.0.1:8000/docs
 
+## Deploy Vercel
+
+- Source of truth Vercel saat ini adalah project root `ai_trading_dashboard_prototipe` yang membaca [vercel.json](</C:/Users/Diel2011/Documents/Project LLM/ai_trading_dashboard_prototipe/vercel.json>) dengan `experimentalServices` untuk:
+  - `apps/web` pada route `/`
+  - `apps/api/vercel_entry.py` pada route `/backend`
+- Jika ada project Vercel lain bernama `web`, anggap itu legacy/terpisah dan bukan target deploy utama repo ini.
+- Env production untuk persistence backend harus dipasang di project root `ai_trading_dashboard_prototipe`, bukan di project `web` terpisah.
+- Jika env root belum ada, frontend tetap bisa hidup tetapi endpoint history/watchlist akan fallback karena backend persistence berjalan dalam mode disabled.
+
+Env minimum untuk root production:
+
+```env
+SUPABASE_ENABLED=true
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+SUPABASE_ANON_KEY=<anon-key-optional>
+```
+
+Catatan:
+- `SUPABASE_SERVICE_ROLE_KEY` hanya untuk backend. Jangan expose key ini ke browser atau variabel `NEXT_PUBLIC_*`.
+- `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` hanya relevan kalau nanti frontend browser/session Supabase benar-benar dipakai.
+- Untuk bootstrap schema production, jalankan juga migration `supabase/migrations/0004_revoke_anon_mutable_table_privileges.sql` agar `anon` tetap read-only pada tabel mutable.
+
 ## Mengganti Mode ke `http_api`
 
 Edit file [config/settings.py](</C:/Users/Diel2011/Documents/Project LLM/ai_trading_dashboard_prototipe/config/settings.py>):
@@ -193,5 +223,7 @@ venv\Scripts\python.exe -m pytest -q
 
 - Arsitektur lama tetap tersedia untuk compatibility.
 - `app.py` di root berstatus legacy/deprecated dan bukan launcher utama.
+- Cache market, signal history, dan SQLite lokal ditulis ke `runtime/` agar repo tidak kotor oleh data hasil jalan aplikasi.
 - Fokus produksi baru diarahkan ke layer `apps/ + services/ + domain/ + infrastructure/ + schemas/`.
 - `apps/streamlit_app/ui/renderer_legacy.py` adalah renderer UI lama yang sudah tidak dipakai launcher utama; dipertahankan sementara untuk referensi migrasi.
+- Untuk deploy Vercel, anggap root project `ai_trading_dashboard_prototipe` sebagai target utama sampai ada keputusan eksplisit untuk mengganti topology.

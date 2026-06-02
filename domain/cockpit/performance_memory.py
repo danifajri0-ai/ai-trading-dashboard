@@ -5,8 +5,10 @@ import json
 from pathlib import Path
 from typing import Any
 
+from config import RUNTIME_PATHS
 
-DEFAULT_HISTORY_PATH = Path("data/cockpit/signal_history.jsonl")
+
+DEFAULT_HISTORY_PATH = RUNTIME_PATHS.signal_history
 
 
 def append_signal_snapshot(
@@ -14,13 +16,16 @@ def append_signal_snapshot(
     history_path: str | Path = DEFAULT_HISTORY_PATH,
 ) -> dict[str, Any]:
     path = Path(history_path)
-    path.parent.mkdir(parents=True, exist_ok=True)
-    payload = {
-        "recorded_at": datetime.now(timezone.utc).isoformat(),
-        **snapshot,
-    }
-    with path.open("a", encoding="utf-8") as handle:
-        handle.write(json.dumps(payload, sort_keys=True) + "\n")
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "recorded_at": datetime.now(timezone.utc).isoformat(),
+            **snapshot,
+        }
+        with path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(payload, sort_keys=True) + "\n")
+    except OSError:
+        return {"status": "not_available", "path": str(path), "recorded": False}
     return {"status": "available", "path": str(path), "recorded": True}
 
 
@@ -82,8 +87,11 @@ def _not_available(reason: str) -> dict[str, Any]:
 
 def _read_records(path: Path, limit: int) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
-    with path.open("r", encoding="utf-8") as handle:
-        lines = handle.readlines()[-limit:]
+    try:
+        with path.open("r", encoding="utf-8") as handle:
+            lines = handle.readlines()[-limit:]
+    except OSError:
+        return records
     for line in lines:
         try:
             record = json.loads(line)

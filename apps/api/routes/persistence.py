@@ -6,13 +6,14 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from services.persistence_service import (
+    PersistenceService,
     PersistenceUnavailableError,
     build_persistence_service,
 )
 
 
 router = APIRouter(prefix="/api", tags=["persistence"])
-_PERSISTENCE_SERVICE = build_persistence_service()
+_PERSISTENCE_SERVICE: PersistenceService | None = None
 
 
 class AnalysisLogBody(BaseModel):
@@ -39,7 +40,9 @@ class UserProfileBody(BaseModel):
     user_id: str
     email: str
     display_name: str | None = ""
+    full_name: str | None = None
     tier: Literal["free", "plus", "pro"] = "free"
+    role: Literal["free", "plus", "pro"] | None = None
     is_active: bool = True
 
 
@@ -53,7 +56,7 @@ class UsageEventBody(BaseModel):
 @router.post("/analysis/logs")
 def create_analysis_log(body: AnalysisLogBody) -> dict[str, Any]:
     try:
-        return _PERSISTENCE_SERVICE.save_analysis_log(
+        return _get_persistence_service().save_analysis_log(
             user_id=body.user_id,
             symbol=body.symbol,
             timeframe=body.timeframe,
@@ -76,7 +79,7 @@ def get_analysis_history(
     timeframe: str | None = None,
 ) -> dict[str, Any]:
     try:
-        records = _PERSISTENCE_SERVICE.list_analysis_history(
+        records = _get_persistence_service().list_analysis_history(
             limit=limit,
             user_id=user_id,
             symbol=symbol,
@@ -90,7 +93,7 @@ def get_analysis_history(
 @router.post("/watchlist")
 def add_watchlist(body: WatchlistBody) -> dict[str, Any]:
     try:
-        return _PERSISTENCE_SERVICE.add_watchlist(
+        return _get_persistence_service().add_watchlist(
             user_id=body.user_id,
             symbol=body.symbol,
             market_type=body.market_type,
@@ -107,7 +110,7 @@ def get_watchlist(
     user_id: str | None = None,
 ) -> dict[str, Any]:
     try:
-        items = _PERSISTENCE_SERVICE.list_watchlist(limit=limit, user_id=user_id)
+        items = _get_persistence_service().list_watchlist(limit=limit, user_id=user_id)
     except PersistenceUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"items": items, "count": len(items)}
@@ -116,7 +119,7 @@ def get_watchlist(
 @router.delete("/watchlist/{item_id}")
 def delete_watchlist(item_id: str, user_id: str | None = None) -> dict[str, Any]:
     try:
-        deleted = _PERSISTENCE_SERVICE.delete_watchlist(item_id=item_id, user_id=user_id)
+        deleted = _get_persistence_service().delete_watchlist(item_id=item_id, user_id=user_id)
     except PersistenceUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     if not deleted:
@@ -127,11 +130,13 @@ def delete_watchlist(item_id: str, user_id: str | None = None) -> dict[str, Any]
 @router.post("/users/profile")
 def upsert_user_profile(body: UserProfileBody) -> dict[str, Any]:
     try:
-        return _PERSISTENCE_SERVICE.upsert_user_profile(
+        return _get_persistence_service().upsert_user_profile(
             user_id=body.user_id,
             email=body.email,
             display_name=body.display_name,
+            full_name=body.full_name,
             tier=body.tier,
+            role=body.role,
             is_active=body.is_active,
         )
     except PersistenceUnavailableError as exc:
@@ -141,7 +146,7 @@ def upsert_user_profile(body: UserProfileBody) -> dict[str, Any]:
 @router.get("/users/profile/{user_id}")
 def get_user_profile(user_id: str) -> dict[str, Any]:
     try:
-        profile = _PERSISTENCE_SERVICE.get_user_profile(user_id=user_id)
+        profile = _get_persistence_service().get_user_profile(user_id=user_id)
     except PersistenceUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     if profile is None:
@@ -152,7 +157,7 @@ def get_user_profile(user_id: str) -> dict[str, Any]:
 @router.get("/users/tier-limits")
 def get_tier_limits() -> dict[str, Any]:
     try:
-        items = _PERSISTENCE_SERVICE.list_tier_limits()
+        items = _get_persistence_service().list_tier_limits()
     except PersistenceUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     return {"items": items, "count": len(items)}
@@ -161,7 +166,7 @@ def get_tier_limits() -> dict[str, Any]:
 @router.post("/users/usage-events")
 def create_usage_event(body: UsageEventBody) -> dict[str, Any]:
     try:
-        return _PERSISTENCE_SERVICE.log_usage_event(
+        return _get_persistence_service().log_usage_event(
             user_id=body.user_id,
             event_type=body.event_type,
             context=body.context,
@@ -169,3 +174,10 @@ def create_usage_event(body: UsageEventBody) -> dict[str, Any]:
         )
     except PersistenceUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+def _get_persistence_service() -> PersistenceService:
+    global _PERSISTENCE_SERVICE
+    if _PERSISTENCE_SERVICE is None:
+        _PERSISTENCE_SERVICE = build_persistence_service()
+    return _PERSISTENCE_SERVICE
