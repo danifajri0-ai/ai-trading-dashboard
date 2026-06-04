@@ -17,8 +17,12 @@ def test_deploy_ready_script_checks_services_and_requirements() -> None:
         ".env.example",
         ".env.local",
         ".gitignore",
+        ".vercelignore",
         "missing keys from .env.example",
         ".gitignore should ignore .env.local",
+        "vercelignore_content",
+        "tests/**",
+        "docs/**",
         "streamlit-autorefresh",
         "uvicorn",
     ]:

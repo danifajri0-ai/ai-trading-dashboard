@@ -39,6 +39,7 @@ def main() -> int:
     env_example_path = ROOT / ".env.example"
     env_local_path = ROOT / ".env.local"
     gitignore_path = ROOT / ".gitignore"
+    vercelignore_path = ROOT / ".vercelignore"
 
     _require(vercel_path.exists(), "vercel.json is missing.", failures)
     _require(requirements_path.exists(), "requirements.txt is missing.", failures)
@@ -47,6 +48,7 @@ def main() -> int:
     _require(env_example_path.exists(), ".env.example is missing.", failures)
     _require(env_local_path.exists(), ".env.local is missing.", failures)
     _require(gitignore_path.exists(), ".gitignore is missing.", failures)
+    _require(vercelignore_path.exists(), ".vercelignore is missing.", failures)
 
     if vercel_path.exists():
         config = json.loads(vercel_path.read_text(encoding="utf-8"))
@@ -90,6 +92,11 @@ def main() -> int:
     if gitignore_path.exists():
         gitignore_content = gitignore_path.read_text(encoding="utf-8")
         _require(".env.local" in gitignore_content, ".gitignore should ignore .env.local.", failures)
+
+    if vercelignore_path.exists():
+        vercelignore_content = vercelignore_path.read_text(encoding="utf-8")
+        for pattern in ["tests/**", "docs/**", "apps/streamlit_app/**", "runtime/**"]:
+            _require(pattern in vercelignore_content, f".vercelignore should ignore {pattern}.", failures)
 
     if env_example_path.exists() and env_local_path.exists():
         example_keys = _read_env_keys(env_example_path)
