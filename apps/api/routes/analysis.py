@@ -6,7 +6,6 @@ import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 
-from services.analysis_service import analyze_market
 from services.persistence_service import (
     PersistenceService,
     PersistenceUnavailableError,
@@ -16,6 +15,7 @@ from services.persistence_service import (
 router = APIRouter(tags=["analysis"])
 logger = logging.getLogger(__name__)
 _PERSISTENCE_SERVICE: PersistenceService | None = None
+analyze_market = None
 
 
 class AnalyzeRequestBody(BaseModel):
@@ -27,7 +27,11 @@ class AnalyzeRequestBody(BaseModel):
 @router.post("/analyze")
 def analyze(body: AnalyzeRequestBody) -> dict:
     try:
-        result = analyze_market(symbol=body.symbol, timeframe=body.timeframe)
+        analyze_market_fn = analyze_market
+        if analyze_market_fn is None:
+            from services.analysis_service import analyze_market as analyze_market_fn
+
+        result = analyze_market_fn(symbol=body.symbol, timeframe=body.timeframe)
         payload = asdict(result)
         if body.save_to_history:
             _safe_save_analysis_history(payload)
