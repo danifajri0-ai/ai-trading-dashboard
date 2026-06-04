@@ -22,6 +22,8 @@ echo Installing dependencies...
 if errorlevel 1 goto :pip_failed
 "%PYTHON_EXE%" -m pip install -r requirements-api-local.txt
 if errorlevel 1 goto :pip_failed
+"%PYTHON_EXE%" -m pip install -r requirements-market-local.txt
+if errorlevel 1 goto :pip_failed
 
 echo.
 echo Starting FastAPI on http://127.0.0.1:8000

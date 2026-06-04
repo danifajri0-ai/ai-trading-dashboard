@@ -94,6 +94,7 @@ venv\Scripts\activate
 pip install -r requirements.txt
 pip install -r requirements-local.txt
 pip install -r requirements-api-local.txt
+pip install -r requirements-market-local.txt
 ```
 
 ## Menjalankan Streamlit (local_service mode)
@@ -156,6 +157,7 @@ Catatan:
 - `SUPABASE_SERVICE_ROLE_KEY` hanya untuk backend. Jangan expose key ini ke browser atau variabel `NEXT_PUBLIC_*`.
 - `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` hanya relevan kalau nanti frontend browser/session Supabase benar-benar dipakai.
 - Untuk bootstrap schema production, jalankan juga migration `supabase/migrations/0004_revoke_anon_mutable_table_privileges.sql` agar `anon` tetap read-only pada tabel mutable.
+- Jika butuh data publik non-Binance secara lokal, install juga `requirements-market-local.txt`.
 
 Audit lokal deploy bisa dijalankan dengan:
 

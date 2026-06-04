@@ -27,6 +27,7 @@ def test_run_api_bat_installs_backend_local_dependencies() -> None:
 
     assert "pip install -r requirements.txt" in normalized
     assert "pip install -r requirements-api-local.txt" in normalized
+    assert "pip install -r requirements-market-local.txt" in normalized
     assert "pip install -r requirements-local.txt" not in normalized
 
 
@@ -40,6 +41,7 @@ def test_run_streamlit_bat_installs_streamlit_local_dependencies() -> None:
     assert "pip install -r requirements.txt" in normalized
     assert "pip install -r requirements-local.txt" in normalized
     assert "pip install -r requirements-api-local.txt" not in normalized
+    assert "pip install -r requirements-market-local.txt" in normalized
 
 
 def test_run_deploy_checks_bat_calls_audit_helper() -> None:

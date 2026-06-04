@@ -14,6 +14,7 @@ def test_deploy_ready_script_checks_services_and_requirements() -> None:
         "apps/api/vercel_entry.py",
         "requirements-local.txt",
         "requirements-api-local.txt",
+        "requirements-market-local.txt",
         ".env.example",
         ".env.local",
         ".gitignore",
@@ -25,5 +26,6 @@ def test_deploy_ready_script_checks_services_and_requirements() -> None:
         "docs/**",
         "streamlit-autorefresh",
         "uvicorn",
+        "yfinance",
     ]:
         assert needle in content

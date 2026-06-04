@@ -36,6 +36,7 @@ def main() -> int:
     requirements_path = ROOT / "requirements.txt"
     requirements_local_path = ROOT / "requirements-local.txt"
     requirements_api_local_path = ROOT / "requirements-api-local.txt"
+    requirements_market_local_path = ROOT / "requirements-market-local.txt"
     env_example_path = ROOT / ".env.example"
     env_local_path = ROOT / ".env.local"
     gitignore_path = ROOT / ".gitignore"
@@ -45,6 +46,7 @@ def main() -> int:
     _require(requirements_path.exists(), "requirements.txt is missing.", failures)
     _require(requirements_local_path.exists(), "requirements-local.txt is missing.", failures)
     _require(requirements_api_local_path.exists(), "requirements-api-local.txt is missing.", failures)
+    _require(requirements_market_local_path.exists(), "requirements-market-local.txt is missing.", failures)
     _require(env_example_path.exists(), ".env.example is missing.", failures)
     _require(env_local_path.exists(), ".env.local is missing.", failures)
     _require(gitignore_path.exists(), ".gitignore is missing.", failures)
@@ -88,6 +90,10 @@ def main() -> int:
     if requirements_api_local_path.exists():
         api_local_requirements = set(_read_lines(requirements_api_local_path))
         _require(any(line.startswith("uvicorn") for line in api_local_requirements), "requirements-api-local.txt should include uvicorn.", failures)
+
+    if requirements_market_local_path.exists():
+        market_local_requirements = set(_read_lines(requirements_market_local_path))
+        _require(any(line.startswith("yfinance") for line in market_local_requirements), "requirements-market-local.txt should include yfinance.", failures)
 
     if gitignore_path.exists():
         gitignore_content = gitignore_path.read_text(encoding="utf-8")

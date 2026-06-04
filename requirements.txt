@@ -1,8 +1,6 @@
-yfinance>=0.2.40,<2.0
 pandas>=2.0,<4.0
 numpy>=1.26,<2.0
 ta>=0.11,<1.0
 fastapi>=0.110,<1.0
 pydantic>=2.7,<3.0
 supabase>=2.4,<3.0
-httpx>=0.27,<1.0

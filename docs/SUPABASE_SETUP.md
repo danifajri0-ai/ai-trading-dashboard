@@ -48,6 +48,7 @@ Catatan:
 - `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` belum wajib untuk arsitektur sekarang karena browser auth/client Supabase belum menjadi jalur utama.
 - Status Supabase di UI frontend hanya indikator opsional; root Vercel env tetap source of truth untuk backend persistence.
 - `requirements.txt` backend-first; jika menjalankan Streamlit lokal, install juga `requirements-local.txt`. Jika menjalankan FastAPI lokal, install `requirements-api-local.txt`.
+- Jika butuh data publik non-Binance secara lokal, install juga `requirements-market-local.txt`.
 - Untuk audit cepat sebelum redeploy, jalankan `venv\Scripts\python.exe scripts\check_deploy_ready.py`.
 
 ## 4) SQL Table yang Dibutuhkan
