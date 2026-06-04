@@ -32,7 +32,7 @@ export default async function WatchlistPage() {
         <section className="card">
           <h3>Watchlist Unavailable</h3>
           <p className="section-subtitle">
-            Frontend tidak menampilkan mock watchlist. Verifikasi status persistence backend, URL API, dan env production.
+            Frontend tidak menampilkan mock watchlist. Verifikasi status persistence backend, URL API, dan env production root project.
           </p>
           <p className="section-subtitle">{loadError}</p>
         </section>

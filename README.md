@@ -92,6 +92,8 @@ ai_trading_dashboard_prototipe/
 python -m venv venv
 venv\Scripts\activate
 pip install -r requirements.txt
+pip install -r requirements-local.txt
+pip install -r requirements-api-local.txt
 ```
 
 ## Menjalankan Streamlit (local_service mode)
@@ -139,6 +141,7 @@ API docs:
 - Jika ada project Vercel lain bernama `web`, anggap itu legacy/terpisah dan bukan target deploy utama repo ini.
 - Env production untuk persistence backend harus dipasang di project root `ai_trading_dashboard_prototipe`, bukan di project `web` terpisah.
 - Jika env root belum ada, frontend tetap bisa hidup tetapi endpoint history/watchlist akan fallback karena backend persistence berjalan dalam mode disabled.
+- Halaman `/settings` menampilkan status env frontend opsional, tetapi itu bukan source of truth untuk persistence backend.
 
 Env minimum untuk root production:
 
@@ -153,6 +156,12 @@ Catatan:
 - `SUPABASE_SERVICE_ROLE_KEY` hanya untuk backend. Jangan expose key ini ke browser atau variabel `NEXT_PUBLIC_*`.
 - `NEXT_PUBLIC_SUPABASE_URL` dan `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` hanya relevan kalau nanti frontend browser/session Supabase benar-benar dipakai.
 - Untuk bootstrap schema production, jalankan juga migration `supabase/migrations/0004_revoke_anon_mutable_table_privileges.sql` agar `anon` tetap read-only pada tabel mutable.
+
+Audit lokal deploy bisa dijalankan dengan:
+
+```powershell
+venv\Scripts\python.exe scripts\check_deploy_ready.py
+```
 
 ## Mengganti Mode ke `http_api`
 
@@ -227,3 +236,5 @@ venv\Scripts\python.exe -m pytest -q
 - Fokus produksi baru diarahkan ke layer `apps/ + services/ + domain/ + infrastructure/ + schemas/`.
 - `apps/streamlit_app/ui/renderer_legacy.py` adalah renderer UI lama yang sudah tidak dipakai launcher utama; dipertahankan sementara untuk referensi migrasi.
 - Untuk deploy Vercel, anggap root project `ai_trading_dashboard_prototipe` sebagai target utama sampai ada keputusan eksplisit untuk mengganti topology.
+- `requirements.txt` sekarang backend-first untuk Vercel/API; `requirements-local.txt` dipakai untuk pengalaman Streamlit lokal.
+- `requirements-api-local.txt` dipakai untuk runner FastAPI lokal.

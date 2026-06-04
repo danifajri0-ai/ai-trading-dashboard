@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "functions": {
+    "apps/api/**/*.py": {
+      "excludeFiles": "{apps/web/**,apps/streamlit_app/**,docs/**,tests/**,research/**,runtime/**,venv/**,.pytest_cache/**,pytest_temp/**,**/__pycache__/**,**/*.pyc}"
+    }
+  },
   "experimentalServices": {
     "web": {
       "entrypoint": "apps/web",

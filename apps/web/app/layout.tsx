@@ -26,6 +26,13 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
                 <Link href="/settings">Settings</Link>
               </nav>
             </header>
+            <section className="live-guard-banner" aria-label="deployment status note">
+              <strong>Deployment note</strong>
+              <p>
+                Root Vercel project `ai_trading_dashboard_prototipe` is the source of truth for backend persistence.
+                The separate `web` project is legacy and should stay frozen unless you intentionally repoint it.
+              </p>
+            </section>
             {children}
           </div>
         </div>

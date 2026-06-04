@@ -32,7 +32,7 @@ export default async function HistoryPage() {
         <section className="card">
           <h3>History Unavailable</h3>
           <p className="section-subtitle">
-            Frontend tidak menampilkan mock data untuk history. Verifikasi status persistence backend, URL API, dan env production.
+            Frontend tidak menampilkan mock data untuk history. Verifikasi status persistence backend, URL API, dan env production root project.
           </p>
           <p className="section-subtitle">{loadError}</p>
         </section>

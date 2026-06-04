@@ -41,15 +41,15 @@ export default async function SettingsPage() {
               ? "configured"
               : apiConfigState === "auto_vercel"
                 ? "auto-detected from co-hosted Vercel deployment"
-                : "not set (set API_BASE_URL or NEXT_PUBLIC_API_BASE_URL for separate Vercel web deploys)"}
+              : "not set (set API_BASE_URL or NEXT_PUBLIC_API_BASE_URL for separate Vercel web deploys)"}
           </strong>
         </div>
         <div className="kv">
-          <span>Supabase URL Status</span>
+          <span>Frontend Supabase URL Status</span>
           <strong>{supabaseUrlConfigured ? "configured" : "not set"}</strong>
         </div>
         <div className="kv">
-          <span>Supabase Publishable Key</span>
+          <span>Frontend Supabase Publishable Key</span>
           <strong>{supabaseKeyConfigured ? "configured" : "not set"}</strong>
         </div>
         <div className="kv">
@@ -65,6 +65,9 @@ export default async function SettingsPage() {
             {persistenceReason}
           </p>
         ) : null}
+        <p className="section-subtitle">
+          Backend persistence is controlled by the root Vercel project env, not by these optional frontend Supabase fields.
+        </p>
       </section>
     </main>
   );
