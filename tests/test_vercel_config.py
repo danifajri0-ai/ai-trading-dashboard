@@ -18,7 +18,7 @@ def test_vercel_config_keeps_web_and_api_split() -> None:
 
 def test_vercel_config_excludes_frontend_and_legacy_files_from_python_bundle() -> None:
     config = json.loads(Path("vercel.json").read_text(encoding="utf-8"))
-    exclude_files = config["functions"]["apps/api/**/*.py"]["excludeFiles"]
+    exclude_files = config["experimentalServices"]["api"]["excludeFiles"]
 
     for pattern in [
         "apps/web/**",

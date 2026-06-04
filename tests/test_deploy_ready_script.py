@@ -27,5 +27,6 @@ def test_deploy_ready_script_checks_services_and_requirements() -> None:
         "streamlit-autorefresh",
         "uvicorn",
         "yfinance",
+        "api excludefiles should include",
     ]:
         assert needle in content

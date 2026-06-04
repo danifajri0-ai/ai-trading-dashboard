@@ -63,8 +63,7 @@ def main() -> int:
         _require(api.get("entrypoint") == "apps/api/vercel_entry.py", "Vercel api entrypoint must be apps/api/vercel_entry.py.", failures)
         _require(api.get("routePrefix") == "/backend", "Vercel api route prefix must be '/backend'.", failures)
 
-        functions = config.get("functions", {})
-        api_bundle = functions.get("apps/api/**/*.py", {})
+        api_bundle = services.get("api", {})
         exclude_files = api_bundle.get("excludeFiles", "")
         for pattern in [
             "apps/web/**",
@@ -75,7 +74,7 @@ def main() -> int:
             "runtime/**",
             "venv/**",
         ]:
-            _require(pattern in exclude_files, f"vercel.json excludeFiles should include {pattern}.", failures)
+            _require(pattern in exclude_files, f"vercel.json api excludeFiles should include {pattern}.", failures)
 
     if requirements_path.exists():
         requirements = set(_read_lines(requirements_path))
